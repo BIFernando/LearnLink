@@ -1,33 +1,23 @@
 import React from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MatchesScreen from './src/screens/matching/MatchesScreen';
 
-// Temporary colors until your theme is fixed
+// Temp colors
 const colors = {
   background: '#F5F7FA',
-  white: '#FFFFFF'
+  white: '#FFFFFF',
 };
 
 const App = () => {
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-      <View style={styles.content}>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
         <MatchesScreen />
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-});
 
 export default App;

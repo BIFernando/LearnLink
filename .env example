@@ -1,0 +1,28 @@
+# Firebase Configuration Example
+# Copy this to .env and fill in your values
+
+FIREBASE_API_KEY= "AIzaSyA-CCjKx-2ZB4Tivqg0eCymGObJ_A6Z0F8"
+
+
+
+FIREBASE_AUTH_DOMAIN= "learnlink-8a889.firebaseapp.com"
+
+
+
+FIREBASE_PROJECT_ID= "learnlink-8a889"
+
+
+
+FIREBASE_STORAGE_BUCKET= "learnlink-8a889.firebasestorage.app"
+
+
+
+FIREBASE_MESSAGING_SENDER_ID= "95583296630"
+
+
+
+FIREBASE_APP_ID= "1:95583296630:web:a667dc07ce59f4cafd1357"
+
+
+
+FIREBASE_MEASUREMENT_ID = "G-Z876YL0T3T"

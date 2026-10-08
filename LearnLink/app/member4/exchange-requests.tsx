@@ -1,6 +1,6 @@
-import React, { useEffect, useState} from "react";
+import React, { useEffect, useState } from "react";
 import { router } from "expo-router";
-import{
+import {
   ActivityIndicator,
   FlatList,
   StyleSheet,
@@ -14,24 +14,24 @@ import {
   getOutgoingRequests,
 } from "../../services/member4/exchangeService";
 
-import {ExchangeRequest} from "../../types/member4/member4";
+import { ExchangeRequest } from "../../types/member4/member4";
 
-export default function ExchangeRequestScreen(){
+export default function ExchangeRequestScreen() {
 
   const [incomingRequests, setIncomingRequests] = useState<ExchangeRequest[]>([]);
-  const [outgoingRequests, setOutgoingRequests]=useState<ExchangeRequest[]>([]);
-  const [loading,setLoading] =useState(true);
+  const [outgoingRequests, setOutgoingRequests] = useState<ExchangeRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
   //TEMPORARY USER ID
-  const currentUserId= "TEST_USER_ID";
+  const currentUserId = "TEST_USER_ID";
 
-  useEffect(()=>{
+  useEffect(() => {
     loadRequests();
-  },[]);
+  }, []);
 
   //Data loading function
-  async function loadRequests(){
-    try{
+  async function loadRequests() {
+    try {
       setLoading(true);
 
       const incoming = await getIncomingRequests(currentUserId);
@@ -39,17 +39,27 @@ export default function ExchangeRequestScreen(){
 
       setIncomingRequests(incoming);
       setOutgoingRequests(outgoing);
-    }catch(error){
+    } catch (error) {
       console.error("Failed to load exchange requests: ", error);
-    }finally{
+    } finally {
       setLoading(false);
     }
   }
 
   //Render function for each request
-  function renderRequest({item}:{item: ExchangeRequest}){
-    return(
-      <TouchableOpacity style={styles.card}>
+  function renderRequest({ item }: { item: ExchangeRequest }) {
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() =>
+          router.push({
+            pathname: "/member4/exchange-request-details",
+            params: {
+              requestId: item.id,
+            },
+          })
+        }
+      >
         <Text style={styles.title}>Exchange Request</Text>
         <Text>From: {item.senderId}</Text>
         <Text>To: {item.receiverId}</Text>
@@ -60,41 +70,41 @@ export default function ExchangeRequestScreen(){
   }
 
   //Loading state
-  if(loading){
-    return(
+  if (loading) {
+    return (
       <View style={styles.center}>
-        <ActivityIndicator size="large"/>
+        <ActivityIndicator size="large" />
         <Text>Loading requests...</Text>
       </View>
     );
   }
 
   //Main UI
-  return(
+  return (
     <View style={styles.container}>
       <Text style={styles.header}>Exchange Requests</Text>
       <Text style={styles.sectionTitle}>Incoming Requests</Text>
 
       {/*Conditional rendering for incoming requests*/}
-      {incomingRequests.length===0 ? (
+      {incomingRequests.length === 0 ? (
         <Text style={styles.empty}>No incoming requests</Text>
-      ):(
+      ) : (
         <FlatList
-        data={incomingRequests}
-        keyExtractor={(item)=>item.id}
-        renderItem={renderRequest}/>
+          data={incomingRequests}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRequest} />
       )}
 
       <Text style={styles.sectionTitle}>Outgoing Requests</Text>
-      
+
       {/*Conditional rendering for outgoing requests*/}
-      {outgoingRequests.length===0 ? (
+      {outgoingRequests.length === 0 ? (
         <Text style={styles.empty}>No outgoing requests</Text>
-      ):(
+      ) : (
         <FlatList
-        data={outgoingRequests}
-        keyExtractor={(item)=>item.id}
-        renderItem={renderRequest}/>
+          data={outgoingRequests}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRequest} />
       )}
 
     </View>

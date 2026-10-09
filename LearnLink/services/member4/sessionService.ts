@@ -9,10 +9,32 @@ import {
   orderBy,
   updateDoc,
   serverTimestamp,
+  or,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase";
 import { Session } from "../../types/member4/member4";
+
+// Get sessions where the user is either the teacher or learner.
+export async function getUserSessions(
+  userId: string
+): Promise<Session[]> {
+  const q = query(
+    sessionRef,
+    or(
+      where("teacherId", "==", userId),
+      where("learnerId", "==", userId)
+    ),
+    orderBy("scheduledAt", "asc")
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((document) => ({
+    id: document.id,
+    ...document.data(),
+  })) as Session[];
+}
 
 const sessionRef = collection(db, "sessions");
 

@@ -10,6 +10,7 @@ import {
   updateDoc,
   serverTimestamp,
   or,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase";
@@ -93,4 +94,55 @@ export async function updateSessionStatus(
         status,
         updatedAt:serverTimestamp(),
     });
+}
+
+
+export async function confirmSessionCompletion(
+  sessionId: string,
+  userId: string
+): Promise<"WAITING_FOR_OTHER" | "COMPLETED"> {
+  const sessionRef = doc(db, "sessions", sessionId);
+
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(sessionRef);
+
+    if (!snapshot.exists()) {
+      throw new Error("Session not found.");
+    }
+
+    const data = snapshot.data();
+
+    if (
+      userId !== data.teacherId &&
+      userId !== data.learnerId
+    ) {
+      throw new Error("You are not a participant in this session.");
+    }
+
+    if (!["CONFIRMED", "IN_PROGRESS"].includes(data.status)) {
+      throw new Error("This session is not ready for completion confirmation.");
+    }
+
+    const completedBy: string[] = data.completedBy ?? [];
+
+    if (completedBy.includes(userId)) {
+      return data.status === "COMPLETED"
+        ? "COMPLETED"
+        : "WAITING_FOR_OTHER";
+    }
+
+    const updatedCompletedBy = [...completedBy, userId];
+
+    const bothConfirmed =
+      updatedCompletedBy.includes(data.teacherId) &&
+      updatedCompletedBy.includes(data.learnerId);
+
+    transaction.update(sessionRef, {
+      completedBy: updatedCompletedBy,
+      ...(bothConfirmed ? { status: "COMPLETED" } : {}),
+      updatedAt: serverTimestamp(),
+    });
+
+    return bothConfirmed ? "COMPLETED" : "WAITING_FOR_OTHER";
+  });
 }

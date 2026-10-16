@@ -18,6 +18,7 @@ import {
   updateSessionStatus,
 } from "../../services/member4/sessionService";
 
+import { getCurrentUserId } from "../../services/member4/currentUser";
 import { Session } from "../../types/member4/member4";
 
 export default function SessionDetailsScreen() {
@@ -29,9 +30,6 @@ export default function SessionDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Temporary ID until authentication is integrated.
-  const currentUserId = "TEST_USER_ID";
-
   const loadSession = useCallback(async () => {
     if (!sessionId || Array.isArray(sessionId)) {
       setSession(null);
@@ -41,6 +39,7 @@ export default function SessionDetailsScreen() {
 
     try {
       setLoading(true);
+      const currentUserId = getCurrentUserId();
       const result = await getSession(sessionId);
       setSession(result);
     } catch (error) {
@@ -99,6 +98,7 @@ export default function SessionDetailsScreen() {
           onPress: async () => {
             try {
               setActionLoading(true);
+              const currentUserId = getCurrentUserId();
 
               const result = await confirmSessionCompletion(
                 session.id,
@@ -162,7 +162,7 @@ export default function SessionDetailsScreen() {
       </View>
     );
   }
-
+  const currentUserId = getCurrentUserId();
   const scheduledDate =
     typeof session.scheduledAt?.toDate === "function"
       ? session.scheduledAt.toDate()

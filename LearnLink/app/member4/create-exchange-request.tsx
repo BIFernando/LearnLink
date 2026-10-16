@@ -4,6 +4,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 
 import { createExchangeRequest } from '../../services/member4/exchangeService';
 import { ExchangeType } from "../../types/member4/member4";
+import { getCurrentUserId } from "../../services/member4/currentUser";
 
 export default function CreateExchangeRequest() {
   const [receiverId, setReceiverId] = useState('');
@@ -14,9 +15,6 @@ export default function CreateExchangeRequest() {
   const [exchangeType, setExchangeType] = useState<ExchangeType>('DIRECT');
   const [loading, setLoading] = useState(false);
 
-  //TEMPORARY USERID
-  const senderId = 'TEST_USER_ID'; 
-
   //Submit function
   async function handleSubmit() {
     //Validation
@@ -24,7 +22,7 @@ export default function CreateExchangeRequest() {
       Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
-
+    const senderId = getCurrentUserId();
   //Preventing self sending
   if(receiverId.trim()=== senderId){
     Alert.alert(

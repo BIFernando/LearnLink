@@ -15,6 +15,7 @@ import {
   getCreditTransactions,
 } from "../../services/member4/creditService";
 
+import { getCurrentUserId } from "../../services/member4/currentUser";
 import { CreditTransaction } from "../../types/member4/member4";
 
 export default function CreditWalletScreen() {
@@ -23,9 +24,6 @@ export default function CreditWalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-
-  // Temporary ID until Firebase authentication is integrated.
-  const currentUserId = "TEST_USER_ID";
 
   const loadWallet = useCallback(async (isRefresh = false) => {
     try {
@@ -36,6 +34,7 @@ export default function CreditWalletScreen() {
       }
 
       setError("");
+      const currentUserId = getCurrentUserId();
 
       const [currentBalance, history] = await Promise.all([
         getCreditBalance(currentUserId),

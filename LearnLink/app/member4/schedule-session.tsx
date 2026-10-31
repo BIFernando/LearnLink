@@ -14,6 +14,7 @@ import { router } from "expo-router";
 
 import { createSession } from "../../services/member4/sessionService";
 import { SessionType } from "../../types/member4/member4";
+import { getCurrentUserId } from "@/services/member4/currentUser";
 
 export default function ScheduleSessionScreen() {
   const [exchangeRequestId, setExchangeRequestId] = useState("");
@@ -29,6 +30,8 @@ export default function ScheduleSessionScreen() {
   const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const currentUserId = getCurrentUserId();
+  
   async function handleSchedule() {
     if (
       !exchangeRequestId.trim() ||

@@ -5,12 +5,12 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { createExchangeRequest } from '../../services/member4/exchangeService';
 import { ExchangeType } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
+import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 
 export default function CreateExchangeRequest() {
   const [receiverId, setReceiverId] = useState('');
   const [offeredSkillId, setOfferedSkillId] = useState('');
   const [requestedSkillId, setRequestedSkillId] = useState('');
-  const [creditAmount, setCreditAmount] = useState('0');
   const [message, setMessage] = useState('');
   const [exchangeType, setExchangeType] = useState<ExchangeType>('DIRECT');
   const [loading, setLoading] = useState(false);
@@ -42,9 +42,9 @@ export default function CreateExchangeRequest() {
       offeredSkillId: offeredSkillId.trim(),
       requestedSkillId: requestedSkillId.trim(),
       creditAmount:
-         exchangeType === "CREDIT" ?
-         Number(creditAmount) || 0 :
-         0,
+   exchangeType === "CREDIT"
+     ? CREDITS_PER_SESSION
+     : 0,
       message: message.trim(),
       status: "PENDING",
     });
@@ -148,14 +148,7 @@ return (
             Credit Amount
           </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Enter credit amount"
-            value={creditAmount}
-            onChangeText={setCreditAmount}
-            keyboardType="numeric"
-          />
-        </>
+          </>
       )}
 
       <Text style={styles.label}>

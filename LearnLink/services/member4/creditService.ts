@@ -9,6 +9,9 @@ import {
 
 import { db } from "../../config/firebase";
 import { CreditTransaction } from "../../types/member4/member4";
+// Default credit rules for SkillLoop
+export const INITIAL_CREDITS = 20;
+export const CREDITS_PER_SESSION = 10;
 
 //Get credit transactions
 export async function getCreditTransactions(userId:string)

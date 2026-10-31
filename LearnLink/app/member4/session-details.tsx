@@ -100,10 +100,7 @@ export default function SessionDetailsScreen() {
               setActionLoading(true);
               const currentUserId = getCurrentUserId();
 
-              const result = await confirmSessionCompletion(
-                session.id,
-                currentUserId
-              );
+              const result = await confirmSessionCompletion(sessionId);
 
               await loadSession();
 

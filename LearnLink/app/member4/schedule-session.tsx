@@ -15,11 +15,10 @@ import { router } from "expo-router";
 import { createSession } from "../../services/member4/sessionService";
 import { SessionType } from "../../types/member4/member4";
 import { getCurrentUserId } from "@/services/member4/currentUser";
+import { getExchangeRequest } from "@/services/member4/exchangeService";
 
 export default function ScheduleSessionScreen() {
   const [exchangeRequestId, setExchangeRequestId] = useState("");
-  const [teacherId, setTeacherId] = useState("");
-  const [learnerId, setLearnerId] = useState("");
   const [skillId, setSkillId] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -31,12 +30,10 @@ export default function ScheduleSessionScreen() {
   const [loading, setLoading] = useState(false);
 
   const currentUserId = getCurrentUserId();
-  
+
   async function handleSchedule() {
     if (
       !exchangeRequestId.trim() ||
-      !teacherId.trim() ||
-      !learnerId.trim() ||
       !skillId.trim() ||
       !date.trim() ||
       !time.trim()
@@ -45,15 +42,10 @@ export default function ScheduleSessionScreen() {
       return;
     }
 
-    if (teacherId.trim() === learnerId.trim()) {
-      Alert.alert("Invalid participants", "The teacher and learner must be different users.");
-      return;
-    }
-
     const durationMinutes = Number(duration);
     if (!Number.isInteger(durationMinutes) ||
-        durationMinutes < 15 ||
-        durationMinutes > 240) {
+      durationMinutes < 15 ||
+      durationMinutes > 240) {
       Alert.alert("Invalid duration", "Choose a duration between 15 and 240 minutes.");
       return;
     }
@@ -92,11 +84,42 @@ export default function ScheduleSessionScreen() {
 
     try {
       setLoading(true);
+      const request = await getExchangeRequest(exchangeRequestId.trim());
+
+      if (!request) {
+        throw new Error("Exchange request not found.");
+      }
+
+      if (request.status !== "ACCEPTED") {
+        throw new Error("Only accepted exchange requests can be scheduled.");
+      }
+
+      // Only participants in the exchange can schedule its session.
+      if (
+        currentUserId !== request.senderId &&
+        currentUserId !== request.receiverId
+      ) {
+        throw new Error("You are not a participant in this exchange.");
+      }
+
+      // Determine the teacher and learner based on the selected skill.
+      let sessionTeacherId: string;
+      let sessionLearnerId: string;
+
+      if (skillId.trim() === request.offeredSkillId) {
+        sessionTeacherId = request.senderId;
+        sessionLearnerId = request.receiverId;
+      } else if (skillId.trim() === request.requestedSkillId) {
+        sessionTeacherId = request.receiverId;
+        sessionLearnerId = request.senderId;
+      } else {
+        throw new Error("The selected skill does not belong to this exchange.");
+      }
 
       const sessionId = await createSession({
         exchangeRequestId: exchangeRequestId.trim(),
-        teacherId: teacherId.trim(),
-        learnerId: learnerId.trim(),
+        teacherId: sessionTeacherId,
+        learnerId: sessionLearnerId,
         skillId: skillId.trim(),
         scheduledAt,
         duration: durationMinutes,
@@ -146,24 +169,6 @@ export default function ScheduleSessionScreen() {
         value={exchangeRequestId}
         onChangeText={setExchangeRequestId}
         placeholder="Enter request document ID"
-        autoCapitalize="none"
-      />
-
-      <Text style={styles.label}>Teacher User ID</Text>
-      <TextInput
-        style={styles.input}
-        value={teacherId}
-        onChangeText={setTeacherId}
-        placeholder="Enter teacher UID"
-        autoCapitalize="none"
-      />
-
-      <Text style={styles.label}>Learner User ID</Text>
-      <TextInput
-        style={styles.input}
-        value={learnerId}
-        onChangeText={setLearnerId}
-        placeholder="Enter learner UID"
         autoCapitalize="none"
       />
 

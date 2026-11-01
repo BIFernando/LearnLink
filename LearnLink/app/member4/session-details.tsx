@@ -18,6 +18,7 @@ import {
   updateSessionStatus,
 } from "../../services/member4/sessionService";
 
+import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 import { Session } from "../../types/member4/member4";
 
@@ -98,19 +99,20 @@ export default function SessionDetailsScreen() {
           onPress: async () => {
             try {
               setActionLoading(true);
-              const currentUserId = getCurrentUserId();
 
               const result = await confirmSessionCompletion(sessionId);
 
               await loadSession();
 
               Alert.alert(
-                result === "COMPLETED"
+                result !== "WAITING_FOR_OTHER"
                   ? "Session Completed"
                   : "Confirmation Recorded",
-                result === "COMPLETED"
-                  ? "Both participants have confirmed completion."
-                  : "Your confirmation is saved. The other participant must also confirm."
+                result === "COMPLETED_WITH_CREDITS"
+                  ? `Both participants confirmed completion. ${CREDITS_PER_SESSION} credits were transferred from the learner to the teacher.`
+                  : result === "COMPLETED"
+                    ? "Both participants confirmed completion. No credits were transferred for this DIRECT exchange."
+                    : "Your confirmation is saved. The other participant must also confirm."
               );
             } catch (error) {
               console.error("Failed to confirm completion:", error);
@@ -271,6 +273,14 @@ export default function SessionDetailsScreen() {
             You've confirmed completion. Waiting for the other participant.
           </Text>
         )}
+
+      {session.status === "COMPLETED" && (
+        <Text style={styles.notice}>
+          {session.creditsTransferred
+            ? "Session completed. Credits were transferred from the learner to the teacher."
+            : "Session completed."}
+        </Text>
+      )}
 
       {isParticipant && canCancel && (
         <TouchableOpacity

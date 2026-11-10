@@ -4,10 +4,14 @@ import {
   query,
   where,
   orderBy,
+  doc, getDoc,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase";
 import { CreditTransaction } from "../../types/member4/member4";
+// Default credit rules for SkillLoop
+export const INITIAL_CREDITS = 20;
+export const CREDITS_PER_SESSION = 10;
 
 //Get credit transactions
 export async function getCreditTransactions(userId:string)
@@ -30,3 +34,19 @@ export async function getCreditTransactions(userId:string)
             ...document.data(),
         })) as CreditTransaction[];
     }
+
+    // Retrieve the user's current skill-credit balance.
+export async function getCreditBalance(
+  userId: string
+): Promise<number> {
+  const userRef = doc(db, "users", userId);
+  const snapshot = await getDoc(userRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("User profile not found.");
+  }
+
+  const balance = snapshot.data().skillCredits;
+
+  return typeof balance === "number" ? balance : 0;
+}

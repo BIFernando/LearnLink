@@ -1,50 +1,88 @@
-# Welcome to your Expo app 👋
+# LearnLink
+INTE 22283 : Mobile Applications Development
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+# Getting started
+## 🚀 Project Setup
 
-## Get started
+### Expo Configuration
 
-1. Install dependencies
+SkillLoop is built using **React Native with Expo** and **TypeScript**.
 
-   ```bash
-   npm install
-   ```
+For development and testing, the project uses:
 
-2. Start the app
+* **Expo SDK:** 54
+* **Expo Go:** Used for development and device testing
+* **React Native:** Managed through the selected Expo SDK
+* **TypeScript:** Used for application development
 
-   ```bash
-   npx expo start
-   ```
+### Why Expo SDK 54?
 
-In the output, you'll find options to open the app in a
+We selected **Expo SDK 54** because it is compatible with the version of **Expo Go available through the App Store and Google Play Store**, making it easier for all team members to run and test the application on their physical devices during development.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+> **Important:** All team members should use the same Expo SDK and dependency versions. Do not independently upgrade the Expo SDK without discussing it with the team.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Installing the Project
 
-## Get a fresh project
-
-When you're ready, run:
+After cloning the repository:
 
 ```bash
-npm run reset-project
+git clone <repository-url>
+cd SkillLoop
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Start the development server:
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+The application can then be opened using **Expo Go** by scanning the QR code.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Dependencies
 
-## Join the community
+The project dependencies are defined in `package.json`. Team members should **not install packages individually unless required**.
 
-Join our community of developers creating universal apps.
+If a new dependency is needed:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo install <package-name>
+```
+
+For regular npm packages:
+
+```bash
+npm install <package-name>
+```
+
+After adding a dependency, commit the updated:
+
+```text
+package.json
+package-lock.json
+```
+
+so that all team members can install the same dependencies.
+
+### Team Development Rule
+
+The project follows this workflow:
+
+```text
+Clone Repository
+       ↓
+npm install
+       ↓
+npx expo start
+       ↓
+Open with Expo Go
+       ↓
+Develop Feature
+       ↓
+Commit & Push
+       ↓
+Other Members Pull Changes
+```
+
+**Do not commit `node_modules/` to GitHub.**
+

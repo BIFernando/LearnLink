@@ -3,7 +3,7 @@
 // SCREEN 16: Match Explanation (Your Figma Design)
 // ============================================
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,16 +14,67 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/colors';
-import { mockMatches, getUserById } from '../../utils/mockData';
-import ProgressBar from '../../components/matching/ProgressBar';  // ← ADDED
+import { colors } from '../../../src/theme/colors';
+import ProgressBar from '../../../src/components/matching/ProgressBar';
+import { MatchingService } from '../../config/matching.service';
+import { auth } from '../../../src/services/firebase/config';
+import { IMatch, IUser } from '../../../src/types/matching.types';
+
+const matchingService = new MatchingService();
 
 const MatchExplanationScreen: React.FC<{ route?: any; navigation?: any }> = ({ 
   route, 
   navigation 
 }) => {
-  const matchId = route?.params?.matchId || 'match1';
-  const match = mockMatches.find((m: any) => m.matchId === matchId);
+  const matchId = route?.params?.matchId || '';
+  const currentUserId = auth.currentUser?.uid ?? 'demo-user-1';
+  const [match, setMatch] = useState<IMatch | null>(null);
+  const [user, setUser] = useState<IUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMatch = async () => {
+      setLoading(true);
+
+      const matches = await matchingService.getMatches(currentUserId);
+      const selectedMatch = matches.find((item) => item.matchId === matchId) ?? null;
+
+      if (isMounted) {
+        setMatch(selectedMatch);
+      }
+
+      if (selectedMatch) {
+        const matchedUser = await matchingService.getUser(selectedMatch.matchedUserId);
+        if (isMounted) {
+          setUser(matchedUser);
+        }
+      }
+
+      if (isMounted) {
+        setLoading(false);
+      }
+    };
+
+    if (matchId) {
+      loadMatch();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [matchId, currentUserId]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text>Loading match explanation...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!match) {
     return (
@@ -34,8 +85,6 @@ const MatchExplanationScreen: React.FC<{ route?: any; navigation?: any }> = ({
       </SafeAreaView>
     );
   }
-
-  const user = getUserById(match.matchedUserId);
 
   // Factor breakdown data
   const factors = [

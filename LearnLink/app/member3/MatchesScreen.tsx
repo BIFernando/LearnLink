@@ -14,19 +14,40 @@ import {
   RefreshControl,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';  // ← FIXED
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { mockMatches, getUserById } from '../../utils/mockData';
-import { colors } from '../../theme/colors';
+import { colors } from '../../../src/theme/colors';
+import { MatchingService } from '../../config/matching.service';
+import { auth } from '../../../src/services/firebase/config';
+import { useMatches } from '../../../src/hooks/useMatches';
+import { IMatch, IUser } from '../../../src/types/matching.types';
+
+const matchingService = new MatchingService();
 
 interface MatchCardProps {
-  match: any;
+  match: IMatch;
   onPress: () => void;
 }
 
 const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
-  const user = getUserById(match.matchedUserId);
-  const topReasons = match.reasons.slice(0, 3);
+  const [user, setUser] = useState<IUser | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUser = async () => {
+      const matchedUser = await matchingService.getUser(match.matchedUserId);
+      if (isMounted) {
+        setUser(matchedUser);
+      }
+    };
+
+    loadUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [match.matchedUserId]);
 
   const getMatchLabel = (score: number) => {
     if (score >= 90) return { text: '🔥 Excellent match', color: '#4CAF50' };
@@ -87,34 +108,14 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
 };
 
 const MatchesScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
-  const [matches, setMatches] = useState<any[]>([]);  // ← FIXED
-  const [loading, setLoading] = useState(true);
+  const currentUserId = auth.currentUser?.uid ?? 'demo-user-1';
+  const { matches, loading, error, refresh } = useMatches(currentUserId);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadMatches = () => {
-    setLoading(true);
-    // Check if mockMatches exists
-    if (mockMatches && mockMatches.length > 0) {
-      setTimeout(() => {
-        setMatches(mockMatches);
-        setLoading(false);
-      }, 500);
-    } else {
-      setMatches([]);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadMatches();
-  }, []);
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
-      loadMatches();
-      setRefreshing(false);
-    }, 1000);
+    await refresh();
+    setRefreshing(false);
   };
 
   if (loading) {
@@ -122,6 +123,16 @@ const MatchesScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading matches...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>{error}</Text>
         </View>
       </SafeAreaView>
     );

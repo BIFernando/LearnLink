@@ -15,4 +15,7 @@
       ]
     }
   ]
+  "firestore": {
+    "rules": "firestore.rules"
+  }
 }

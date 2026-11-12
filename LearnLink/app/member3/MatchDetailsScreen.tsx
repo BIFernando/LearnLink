@@ -15,12 +15,13 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../src/theme/colors';
-import ScoreBadge from '../../../src/components/matching/ScoreBadge';
-import SkillTag from '../../../src/components/matching/SkillTag';
+import {
+  ScoreBadge,
+  SkillTag,
+} from '../../components/member3/matching-components';
 import { MatchingService } from '../../config/matching.service';
-import { auth } from '../../../src/services/firebase/config';
-import { IMatch, IUser } from '../../../src/types/matching.types';
+import { auth } from '../../config/firebase';
+import type { IMatch, IUser } from '../../../src/types/matching.types';
 
 const matchingService = new MatchingService();
 

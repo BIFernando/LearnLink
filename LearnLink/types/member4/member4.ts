@@ -1,5 +1,3 @@
-import type { Timestamp } from "firebase/firestore";
-
 export type ExchangeType = "DIRECT" | "CREDIT";
 
 export type ExchangeStatus =
@@ -66,17 +64,4 @@ export interface CreditTransaction {
   referenceId: string;
   description: string;
   createdAt: any;
-}
-
-export interface AttendanceRecord {
-  id: string;
-  sessionId: string;
-  learnerId: string;
-  teacherId: string;
-  checkedInAt: Timestamp;
-}
-
-export interface AttendanceQrPayload {
-  sessionId: string;
-  token: string;
 }

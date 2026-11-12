@@ -37,6 +37,13 @@ export default function RootLayout() {
           title: "Member 4",
         }}
       />
+
+      <Stack.Screen
+        name="admin"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
 
     <StatusBar style="auto" />

@@ -1,0 +1,252 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isExchangeParticipant(data) {
+      return signedIn()
+        && (data.senderId == request.auth.uid
+          || data.receiverId == request.auth.uid);
+    }
+
+    function isSessionParticipant(data) {
+      return signedIn()
+        && (data.teacherId == request.auth.uid
+          || data.learnerId == request.auth.uid);
+    }
+
+    function sessionExchange(data) {
+      return get(
+        /databases/$(database)/documents/exchangeRequests/$(data.exchangeRequestId)
+      ).data;
+    }
+
+    function belongsToAcceptedExchange(data) {
+      let exchange = sessionExchange(data);
+      return exchange.status == 'ACCEPTED'
+        && (
+          (exchange.senderId == data.teacherId
+            && exchange.receiverId == data.learnerId
+            && exchange.offeredSkillId == data.skillId)
+          || (exchange.senderId == data.learnerId
+            && exchange.receiverId == data.teacherId
+            && exchange.requestedSkillId == data.skillId)
+        );
+    }
+
+    function hasCreditTransaction(sessionId, suffix, transactionType, userId) {
+      let transaction = getAfter(
+        /databases/$(database)/documents/creditTransactions/$(sessionId + suffix)
+      ).data;
+      return transaction.referenceId == sessionId
+        && transaction.type == transactionType
+        && transaction.amount == 10
+        && transaction.userId == userId;
+    }
+
+    match /admin/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if ownsUser(userId)
+        && !request.resource.data.keys().hasAny([
+          'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
+        ]);
+      allow update: if isAdmin()
+        || (ownsUser(userId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
+          ]));
+      allow delete: if isAdmin();
+    }
+
+    match /userSkills/{skillId} {
+      allow read: if signedIn();
+      allow create: if isAdmin()
+        || (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId);
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /skills/{skillId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /matches/{matchId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin()
+        || (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /exchangeRequests/{requestId} {
+      allow read: if isAdmin() || isExchangeParticipant(resource.data);
+      allow create: if isAdmin()
+        || (signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.receiverId != request.auth.uid
+          && request.resource.data.status == 'PENDING');
+      allow update: if isAdmin()
+        || (isExchangeParticipant(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && (
+            (resource.data.status == 'PENDING'
+              && request.resource.data.status == 'CANCELLED')
+            || (resource.data.status == 'PENDING'
+              && request.resource.data.status in ['ACCEPTED', 'REJECTED']
+              && resource.data.receiverId == request.auth.uid)
+            || (resource.data.status == 'ACCEPTED'
+              && request.resource.data.status == 'CANCELLED')
+          ));
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAdmin() || isSessionParticipant(resource.data);
+      allow create: if isAdmin()
+        || (isSessionParticipant(request.resource.data)
+          && request.resource.data.completedBy == []
+          && request.resource.data.status == 'PROPOSED'
+          && belongsToAcceptedExchange(request.resource.data));
+      allow update: if isAdmin()
+        || (isSessionParticipant(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'status', 'updatedAt', 'completedBy', 'creditsTransferred'
+            ])
+          && request.resource.data.updatedAt == request.time
+          && (
+            (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'updatedAt'])
+              && (
+                (resource.data.status == 'PROPOSED'
+                  && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
+                || (resource.data.status == 'CONFIRMED'
+                  && request.resource.data.status
+                    in ['IN_PROGRESS', 'CANCELLED', 'DISPUTED'])
+                || (resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.status in ['CANCELLED', 'DISPUTED'])
+              ))
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['completedBy', 'updatedAt'])
+              && resource.data.status in ['CONFIRMED', 'IN_PROGRESS']
+              && resource.data.completedBy is list
+              && request.resource.data.completedBy is list
+              && request.resource.data.completedBy.size()
+                == resource.data.completedBy.size() + 1
+              && request.resource.data.completedBy.hasAll(resource.data.completedBy)
+              && request.resource.data.completedBy.hasAny([request.auth.uid])
+              && !resource.data.completedBy.hasAny([request.auth.uid]))
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly([
+                  'status', 'updatedAt', 'completedBy', 'creditsTransferred'
+                ])
+              && resource.data.status in ['CONFIRMED', 'IN_PROGRESS']
+              && request.resource.data.status == 'COMPLETED'
+              && resource.data.completedBy.hasAny([
+                resource.data.teacherId, resource.data.learnerId
+              ])
+              && !resource.data.completedBy.hasAny([request.auth.uid])
+              && request.resource.data.completedBy.hasAll([
+                resource.data.teacherId, resource.data.learnerId
+              ])
+              && request.resource.data.completedBy.size() == 2
+              && belongsToAcceptedExchange(resource.data)
+              && request.resource.data.creditsTransferred
+                == (sessionExchange(resource.data).exchangeType == 'CREDIT')
+              && (
+                request.resource.data.creditsTransferred != true
+                || (
+                  hasCreditTransaction(
+                    sessionId, '_EARN', 'EARN', resource.data.teacherId
+                  )
+                  && hasCreditTransaction(
+                    sessionId, '_SPEND', 'SPEND', resource.data.learnerId
+                  )
+                )))
+          ));
+      allow delete: if isAdmin();
+    }
+
+    match /creditTransactions/{transactionId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin()
+        || (signedIn()
+          && request.resource.data.referenceId is string
+          && request.resource.data.amount == 10
+          && existsAfter(
+            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+          )
+          && getAfter(
+            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+          ).data.status == 'COMPLETED'
+          && getAfter(
+            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+          ).data.creditsTransferred == true
+          && (
+            (transactionId
+              == request.resource.data.referenceId + '_EARN'
+              && request.resource.data.type == 'EARN'
+              && request.resource.data.userId
+                == getAfter(
+                  /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+                ).data.teacherId)
+            || (transactionId
+              == request.resource.data.referenceId + '_SPEND'
+              && request.resource.data.type == 'SPEND'
+              && request.resource.data.userId
+                == getAfter(
+                  /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+                ).data.learnerId)
+          )
+          && isSessionParticipant(
+            getAfter(
+              /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+            ).data
+          )
+          && belongsToAcceptedExchange(
+            getAfter(
+              /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
+            ).data
+          ));
+      allow update, delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.reporterId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.status == 'OPEN';
+      allow update, delete: if isAdmin();
+    }
+  }
+}

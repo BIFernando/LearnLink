@@ -12,6 +12,7 @@ import { useFocusEffect, router } from "expo-router";
 
 import { getUserSessions } from "../../services/member4/sessionService";
 import { Session } from "../../types/member4/member4";
+import { getCurrentUserId } from "../../services/member4/currentUser";
 
 type SessionFilter = "UPCOMING" | "PAST";
 
@@ -20,12 +21,10 @@ export default function SessionsScreen() {
   const [filter, setFilter] = useState<SessionFilter>("UPCOMING");
   const [loading, setLoading] = useState(true);
 
-  // Temporary ID until Member 1's authentication is integrated.
-  const currentUserId = "TEST_USER_ID";
-
   const loadSessions = useCallback(async () => {
     try {
       setLoading(true);
+      const currentUserId = getCurrentUserId();
       const data = await getUserSessions(currentUserId);
       setSessions(data);
     } catch (error) {

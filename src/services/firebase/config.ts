@@ -1,14 +1,17 @@
+export {
+  app as default,
+  auth,
+  db as firestore,
+  storage,
+} from "../../../LearnLink/config/firebase";
 // ============================================
 // FILE: src/services/firebase/config.ts
-// Firebase Configuration
 // ============================================
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-
-// Import environment variables from .env
 import {
   FIREBASE_API_KEY,
   FIREBASE_AUTH_DOMAIN,
@@ -18,7 +21,6 @@ import {
   FIREBASE_APP_ID,
 } from '@env';
 
-// Firebase configuration
 const firebaseConfig = {
   apiKey: FIREBASE_API_KEY,
   authDomain: FIREBASE_AUTH_DOMAIN,
@@ -28,10 +30,8 @@ const firebaseConfig = {
   appId: FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export services
 export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const storage = getStorage(app);

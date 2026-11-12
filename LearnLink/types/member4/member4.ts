@@ -51,6 +51,7 @@ export interface Session {
   meetingLink?: string;
   status: SessionStatus;
   completedBy: string[];
+  creditsTransferred?: boolean;
   createdAt: any;
   updatedAt: any;
 }

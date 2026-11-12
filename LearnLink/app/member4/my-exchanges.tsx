@@ -14,12 +14,10 @@ import {
 
 import { ExchangeRequest } from "../../types/member4/member4";
 
+import { getCurrentUserId } from "../../services/member4/currentUser";
 export default function MyExchangesScreen() {
   const [ exchanges, setExchanges ] = useState<ExchangeRequest[]>([]);
   const [ loading, setLoading ] = useState(true);
-
-  //TEMOPORARY USER ID
-  const currentUserId = "TEST_USER_ID";
 
   useEffect(() => {
     loadExchanges();
@@ -29,6 +27,7 @@ export default function MyExchangesScreen() {
   async function loadExchanges() {
     try {
       setLoading(true);
+      const currentUserId = getCurrentUserId();
 
       const incoming = await getIncomingRequests(currentUserId);
       const outgoing = await getOutgoingRequests(currentUserId);

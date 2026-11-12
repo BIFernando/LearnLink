@@ -32,14 +32,21 @@ export default function RootLayout() {
             }}
           />
 
-          <Stack.Screen
-            name="member4"
-            options={{
-              headerShown: true,
-              title: "Member 4",
-            }}
-          />
-        </Stack>
+      <Stack.Screen
+        name="member4"
+        options={{
+          headerShown: true,
+          title: "Member 4",
+        }}
+      />
+
+      <Stack.Screen
+        name="admin"
+        options={{
+          headerShown: false,
+        }}
+      />
+    </Stack>
 
         <StatusBar style="auto" />
       </ThemeProvider>

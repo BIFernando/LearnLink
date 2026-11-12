@@ -16,6 +16,7 @@ import {
 } from "../../services/member4/exchangeService";
 
 import { ExchangeRequest } from "../../types/member4/member4";
+import { getCurrentUserId } from "../../services/member4/currentUser";
 
 export default function ExchangeRequestDetailsScreen() {
   const { requestId } = useLocalSearchParams<{
@@ -28,8 +29,7 @@ export default function ExchangeRequestDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // TEMPORARY USER ID
-  const currentUserId = "TEST_USER_ID";
+  const currentUserId = getCurrentUserId();
 
   useEffect(() => {
     loadRequest();

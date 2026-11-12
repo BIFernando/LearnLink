@@ -9,11 +9,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 
 import { auth, db } from "@/config/firebase";
-import type { IUser } from "../../src/types/matching.types";
+import type { StudentProfile } from "@/types/auth";
 
 interface AuthContextValue {
   user: FirebaseUser | null;
-  studentProfile: IUser | null;
+  studentProfile: StudentProfile | null;
   isLoading: boolean;
   isEmailVerified: boolean;
   error: string | null;
@@ -23,7 +23,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [studentProfile, setStudentProfile] = useState<IUser | null>(null);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
               setStudentProfile({
                 ...profileSnapshot.data(),
                 userId: firebaseUser.uid,
-              } as IUser);
+              });
             }
           } catch (error) {
             if (!isActive || currentAuthChangeId !== authChangeId) {

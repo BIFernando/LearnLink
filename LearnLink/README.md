@@ -86,3 +86,59 @@ Other Members Pull Changes
 
 **Do not commit `node_modules/` to GitHub.**
 
+## Admin authentication
+
+Open `/admin/login` to access the admin sign-in screen. Admin access requires
+Firebase Email/Password Authentication and a Firebase custom claim with the
+boolean value `admin: true`. Claims must be assigned or removed only by a
+trusted server using the Firebase Admin SDK; the mobile app cannot grant or
+edit administrator privileges.
+
+The admin route refreshes and verifies the signed-in user's ID token before
+showing protected screens. Firestore authorization uses the same
+`request.auth.token.admin` claim. Deploy the checked-in rules to the intended
+Firebase project with:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+Before deploying, validate the rules against the project's existing data and
+exercise the admin and member flows in the Firebase Emulator Suite. In
+particular, verify that a normal account is redirected from `/admin`, an
+admin account can reach the protected route, sign-out returns to the login
+screen, and direct Firestore requests without the admin claim are denied.
+
+The existing Member 4 credit-completion flow updates both participants'
+`skillCredits` from one client transaction. These rules restrict profile
+updates to the profile owner or an admin, so that cross-user credit transfer
+will be denied. Move that operation to a trusted backend before deploying
+these rules if credit exchanges must remain enabled; do not weaken the profile
+rules to let clients edit another user's balance.
+
+The admin dashboard reads document counts from `users`, `skills`, and
+`exchangeRequests`, and reads the latest exchange requests using their
+`createdAt`, `senderId`, `receiverId`, and `status` fields. Active users are
+counted by `users.isActive == true`. The `skills` collection path is declared
+in the existing Firestore rules, but it does not yet have an app-level schema.
+`userSkills` contains user-to-skill records and is not treated as a count of
+unique catalog skills. Suspended-user counts are unavailable because no
+suspension field is established. The rules declare `reports`, but there is no
+application report schema or defined pending status, so pending-report counts
+are unavailable. There is no general activity log; the dashboard labels its
+recent exchange requests accordingly.
+
+The admin user-management screens page through `users` by document ID and
+search the records currently loaded in the list. User details read matching
+profile fields only when present and query up to 100 `userSkills` documents
+whose `userId` matches the selected user. Email is shown only if stored in the
+user document; the app does not fetch every user's Firebase Authentication
+record. Suspension and reactivation remain unavailable because neither
+suspension fields nor moderation history are defined, and suspended-account
+checks are not enforced by the current rules.
+
+The current `users` and `userSkills` read rules allow any signed-in user to
+read those documents. The admin screen and service verify the admin custom
+claim, but preventing direct reads by non-admin clients requires a coordinated
+Firestore rules/backend decision; this user-management change does not alter
+the rules or break existing member reads.

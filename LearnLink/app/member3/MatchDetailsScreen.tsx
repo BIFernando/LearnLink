@@ -22,6 +22,7 @@ import {
 import { MatchingService } from '../../config/matching.service';
 import { auth } from '../../config/firebase';
 import type { IMatch, IUser } from '../../../src/types/matching.types';
+import { ReportActionButton } from '../../components/reports/ReportActionButton';
 
 const matchingService = new MatchingService();
 
@@ -171,6 +172,12 @@ const MatchDetailsScreen: React.FC<{ route?: any; navigation?: any }> = ({
           >
             <Text style={styles.secondaryButtonText}>👤 View Full Profile</Text>
           </TouchableOpacity>
+
+          <ReportActionButton
+            targetType="USER"
+            targetId={match.matchedUserId}
+            label="Report this user"
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

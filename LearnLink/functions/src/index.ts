@@ -1,3 +1,4 @@
+import { moderateReport, submitReport } from "./reports";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import {

@@ -26,6 +26,7 @@ import {
 import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 import { Session } from "../../types/member4/member4";
+import { ReportActionButton } from "../../components/reports/ReportActionButton";
 
 export default function SessionDetailsScreen() {
   const { sessionId } = useLocalSearchParams<{
@@ -335,6 +336,25 @@ export default function SessionDetailsScreen() {
         </TouchableOpacity>
       )}
 
+      {isParticipant ? (
+        <View style={styles.reportActions}>
+          <ReportActionButton
+            targetType="USER"
+            targetId={
+              currentUserId === session.teacherId
+                ? session.learnerId
+                : session.teacherId
+            }
+            label="Report the other participant"
+          />
+          <ReportActionButton
+            targetType="SESSION"
+            targetId={session.id}
+            label="Report this session"
+          />
+        </View>
+      ) : null}
+
       {actionLoading && <ActivityIndicator style={styles.loader} size="large" />}
 
       <TouchableOpacity
@@ -361,6 +381,7 @@ const styles = StyleSheet.create({
   secondaryButton: { backgroundColor: "#e5e7eb", padding: 14, borderRadius: 8, alignItems: "center", marginTop: 20 },
   secondaryButtonText: { fontWeight: "600" },
   cancelButton: { backgroundColor: "#c62828", padding: 15, borderRadius: 8, alignItems: "center", marginBottom: 12 },
+  reportActions: { marginTop: 8 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   notice: { marginVertical: 12, textAlign: "center" },
   loader: { marginVertical: 12 },

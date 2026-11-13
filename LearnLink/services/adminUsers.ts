@@ -144,7 +144,7 @@ export async function getAdminUserDetails(
   const skillsQuery = query(
     collection(db, "userSkills"),
     where("userId", "==", userId),
-    limit(USER_SKILL_LIMIT)
+    limit(USER_SKILL_LIMIT + 1)
   );
   const [userSnapshot, skillsSnapshot] = await Promise.all([
     getDoc(userReference),
@@ -156,7 +156,8 @@ export async function getAdminUserDetails(
   }
 
   const data = userSnapshot.data();
-  const skills = skillsSnapshot.docs.map((skillDocument) => {
+  const skillDocuments = skillsSnapshot.docs.slice(0, USER_SKILL_LIMIT);
+  const skills = skillDocuments.map((skillDocument) => {
     const skillData = skillDocument.data();
     const name =
       optionalString(skillData.skillName) ??
@@ -190,6 +191,6 @@ export async function getAdminUserDetails(
     ratingCount: optionalNumber(data.ratingCount),
     skillCredits: optionalNumber(data.skillCredits),
     skills,
-    skillsMayBeTruncated: skillsSnapshot.size === USER_SKILL_LIMIT,
+    skillsMayBeTruncated: skillsSnapshot.size > USER_SKILL_LIMIT,
   };
 }

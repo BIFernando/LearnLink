@@ -37,6 +37,11 @@ const sections: DashboardSection[] = [
     route: "skills",
   },
   {
+    title: "Category Management",
+    description: "Organize skills into catalog categories",
+    route: "categories",
+  },
+  {
     title: "Reports",
     description: "Review user-reported content",
     route: "reports",
@@ -107,6 +112,18 @@ export default function AdminHomeScreen() {
       router.push("/admin/users");
       return;
     }
+    if (route === "skills" || route === "categories") {
+      router.push(`/admin/${route}`);
+      return;
+    }
+    if (route === "reports") {
+      router.push("/admin/reports");
+      return;
+    }
+    if (route === "analytics") {
+      router.push("/admin/analytics");
+      return;
+    }
 
     router.push({
       pathname: "/admin/[section]",
@@ -170,9 +187,9 @@ export default function AdminHomeScreen() {
       color: "#C17B1A",
     },
     {
-      label: "Pending Reports",
-      value: null,
-      detail: "Report status and pending-state schema are not defined.",
+      label: "Open Reports",
+      value: dashboard.openReports,
+      detail: "Reports marked OPEN.",
       color: "#B54862",
     },
   ];
@@ -181,6 +198,7 @@ export default function AdminHomeScreen() {
     dashboard.totalUsers > 0 ||
     dashboard.totalSkills > 0 ||
     dashboard.totalExchanges > 0 ||
+    dashboard.openReports > 0 ||
     dashboard.recentActivities.length > 0;
 
   return (

@@ -243,10 +243,12 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow read: if isAdmin()
         || (signedIn() && resource.data.reporterId == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.reporterId == request.auth.uid
-        && request.resource.data.status == 'OPEN';
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if false;
+
+      match /moderationHistory/{eventId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if false;
+      }
     }
   }
 }

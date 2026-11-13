@@ -18,6 +18,7 @@ export interface AdminDashboardData {
   activeUsers: number;
   totalSkills: number;
   totalExchanges: number;
+  openReports: number;
   recentActivities: RecentExchangeActivity[];
 }
 
@@ -52,21 +53,30 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
   const usersRef = collection(db, "users");
   const skillsRef = collection(db, "skills");
   const exchangesRef = collection(db, "exchangeRequests");
+  const reportsRef = collection(db, "reports");
 
-  const [usersCount, activeUsersCount, skillsCount, exchangesCount, exchanges] =
-    await Promise.all([
-      getCountFromServer(usersRef),
-      getCountFromServer(query(usersRef, where("isActive", "==", true))),
-      getCountFromServer(skillsRef),
-      getCountFromServer(exchangesRef),
-      getDocs(query(exchangesRef, orderBy("createdAt", "desc"), limit(6))),
-    ]);
+  const [
+    usersCount,
+    activeUsersCount,
+    skillsCount,
+    exchangesCount,
+    openReportsCount,
+    exchanges,
+  ] = await Promise.all([
+    getCountFromServer(usersRef),
+    getCountFromServer(query(usersRef, where("isActive", "==", true))),
+    getCountFromServer(skillsRef),
+    getCountFromServer(exchangesRef),
+    getCountFromServer(query(reportsRef, where("status", "==", "OPEN"))),
+    getDocs(query(exchangesRef, orderBy("createdAt", "desc"), limit(6))),
+  ]);
 
   return {
     totalUsers: usersCount.data().count,
     activeUsers: activeUsersCount.data().count,
     totalSkills: skillsCount.data().count,
     totalExchanges: exchangesCount.data().count,
+    openReports: openReportsCount.data().count,
     recentActivities: exchanges.docs.map((document) => {
       const data = document.data();
 

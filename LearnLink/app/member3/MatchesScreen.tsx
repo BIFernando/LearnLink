@@ -16,11 +16,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../src/theme/colors';
 import { MatchingService } from '../../config/matching.service';
-import { auth } from '../../../src/services/firebase/config';
-import { useMatches } from '../../../src/hooks/useMatches';
-import { IMatch, IUser } from '../../../src/types/matching.types';
+import { auth } from '../../config/firebase';
+import { useMatches } from '../../hooks/useMatches';
+import { colors } from '../../components/member3/matching-components';
+import type { IMatch, IUser } from '../../../src/types/matching.types';
 
 const matchingService = new MatchingService();
 

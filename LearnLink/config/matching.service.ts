@@ -2,7 +2,6 @@
 // FILE: src/services/firebase/matching.service.ts
 // ============================================
 
-import { firestore } from '../../src/services/firebase/config';
 import {
   collection,
   doc,
@@ -17,7 +16,8 @@ import {
   getDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { IMatch, IUser, IUserSkill } from '../../src/types/matching.types';
+import type { IMatch, IUser, IUserSkill } from '../../src/types/matching.types';
+import { db as firestore } from './firebase';
 
 export class MatchingService {
   // ──────────────────────────────────────────────

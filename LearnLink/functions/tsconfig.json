@@ -1,14 +1,16 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "target": "es2020",
-    "rootDir": "..",
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "src",
     "outDir": "lib",
     "strict": true,
     "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "sourceMap": true,
     "noEmitOnError": true
   },
-  "include": ["src/**/*.ts", "../types/reports.ts"]
+  "include": ["src/**/*.ts"]
 }

@@ -10,7 +10,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import {
+  router,
+  useFocusEffect,
+  useLocalSearchParams,
+  type Href,
+} from "expo-router";
 
 import {
   confirmSessionCompletion,
@@ -178,6 +183,16 @@ export default function SessionDetailsScreen() {
     ["CONFIRMED", "IN_PROGRESS"].includes(session.status) &&
     Date.now() >= scheduledDate.getTime();
 
+  const canGenerateAttendanceQr =
+    currentUserId === session.teacherId &&
+    session.sessionType === "IN_PERSON" &&
+    ["CONFIRMED", "IN_PROGRESS"].includes(session.status);
+
+  const canScanAttendanceQr =
+    currentUserId === session.learnerId &&
+    session.sessionType === "IN_PERSON" &&
+    ["CONFIRMED", "IN_PROGRESS"].includes(session.status);
+
   const alreadyConfirmed =
     session.completedBy?.includes(currentUserId) ?? false;
 
@@ -242,6 +257,34 @@ export default function SessionDetailsScreen() {
           </>
         ) : null}
       </View>
+
+      {canGenerateAttendanceQr && (
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() =>
+            router.push({
+              pathname: "/member4/attendance-qr",
+              params: { sessionId: session.id },
+            } as unknown as Href)
+          }
+        >
+          <Text style={styles.buttonText}>Generate Attendance QR</Text>
+        </TouchableOpacity>
+      )}
+
+      {canScanAttendanceQr && (
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() =>
+            router.push({
+              pathname: "/member4/attendance-scan",
+              params: { sessionId: session.id },
+            } as unknown as Href)
+          }
+        >
+          <Text style={styles.buttonText}>Scan Attendance QR</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Completion Confirmation</Text>

@@ -65,7 +65,26 @@ Owner: Member 5 (imChamikara) · Branch: `feature/member5-chat-notifications-gam
 - [x] 9. **Cloud Functions** in `functions/src/member5/`: onMessageCreated, onExchangeRequestWritten, onReviewCreated, onSessionCompleted, sendSessionReminders, submitChallengeAttempt, checkBadges, awardXp. (Mark-read is a client batch allowed by rules, not a callable. Push trigger comes last.)
 - [x] 10. Rules: "Member 5" section at the end of `firestore.rules`. Indexes: new `firestore.indexes.json` + `"indexes"` entry in `firebase.json`
 - [x] 11. Seed script: `functions/scripts/seedMember5.cjs` (11 badges, 3 challenges + answer keys)
-- [ ] 12. Final report + PR description
+- [x] 11a. Entry points: `components/member5/Member5Shortcuts.tsx` on Home, Give Review button on Member 4's session details
+- [ ] 12. **Push notifications: skipped (deferred).** `expo-notifications` needs an EAS `projectId` (`eas init`, Expo account) to get a push token, and a **development build** on Android (remote push isn't supported in Expo Go since SDK 53). When ready: install `expo-notifications`, save the token to `pushTokens/{userId}` (rules and type already exist), add an `onNotificationCreated` function that posts to the Expo push API and skips users without a token.
+- [x] 13. Final report + PR description
+
+## 3a. Changes outside Member 5's area (for Member 6 and others)
+| File | Change | Owner |
+|---|---|---|
+| `/.gitignore` (repo root, new) | Ignore `.env*`, `node_modules/`, `.expo/`, `dist/`, `functions/lib/`, `service-account*.json` | Team |
+| `LearnLink/.gitignore` | `.env*` (keeps `.env.example`), `service-account*.json` | Member 6 |
+| `firebase.json` | Fixed missing comma; added `"indexes": "firestore.indexes.json"` | Member 6 |
+| `firestore.rules` | `users` update can't touch `xp, level, ratingAverage, ratingCount, streak, skillCredits`; new "Member 5" section at the end | Member 6 / Member 1 |
+| `firestore.indexes.json` (new) | 6 composite indexes (incl. `sessions` status+scheduledAt for reminders) | Member 6 |
+| `app/_layout.tsx` | 3 `Stack.Screen` lines: `notifications`, `reviews`, `gamification` | Member 6 |
+| `app/(tabs)/index.tsx` | `<Member5Shortcuts />` + import (temporary until tabs exist) | Member 6 |
+| `functions/src/index.ts` | `export * from "./member5";` | Member 6 |
+| `app/member4/session-details.tsx` | "Give Review" button when status is COMPLETED | Member 4 |
+
+**Member 4 heads-up:** the CREDIT completion path updates **both** users' `skillCredits` from the client. The old rules already blocked writing the other user's doc, and `skillCredits` is now server-only, so credit transfer must move to a Cloud Function (Admin SDK).
+
+**Member 6 heads-up:** `npm --prefix functions run build` fails on main because `functions/src/reports.ts` imports `../../types/reports` (outside `rootDir`). Deploys will fail until that's fixed.
 
 ## 4. Files
 

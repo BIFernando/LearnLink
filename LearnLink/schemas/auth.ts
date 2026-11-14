@@ -33,7 +33,13 @@ export const studentRegistrationSchema = z
     },
   );
 
+export const studentLoginSchema = z.object({
+  email: studentAcademicEmailSchema,
+  password: z.string().min(1, "Enter your password."),
+});
 
 export type StudentRegistrationValues = z.infer<
   typeof studentRegistrationSchema
 >;
+
+export type StudentLoginValues = z.infer<typeof studentLoginSchema>;

@@ -1,13 +1,18 @@
 import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   sendEmailVerification,
+  signInWithEmailAndPassword,
+  type User,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../config/firebase";
 import {
+  studentLoginSchema,
   studentRegistrationSchema,
+  type StudentLoginValues,
   type StudentRegistrationValues,
 } from "../schemas/auth";
 
@@ -126,4 +131,19 @@ export async function registerStudent(
     status: "unverified",
     emailVerificationSent: true,
   };
+}
+
+export async function signInStudent(
+  credentials: StudentLoginValues,
+): Promise<User> {
+  const { email, password } = studentLoginSchema.parse(credentials);
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  return credential.user;
+}
+
+export async function sendStudentPasswordResetEmail(
+  email: string,
+): Promise<void> {
+  const normalizedEmail = studentLoginSchema.shape.email.parse(email);
+  await sendPasswordResetEmail(auth, normalizedEmail);
 }

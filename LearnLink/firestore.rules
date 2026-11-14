@@ -69,6 +69,10 @@ service cloud.firestore {
         || (ownsUser(userId)
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
+          ])
+          // Server-managed fields: written only by Cloud Functions (Admin SDK).
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'xp', 'level', 'ratingAverage', 'ratingCount', 'streak', 'skillCredits'
           ]));
       allow delete: if isAdmin();
     }

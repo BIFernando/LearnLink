@@ -1,8 +1,14 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 
-const StudentCard = ({ student, onPress, matchScore }) => {
-    const renderStars = (rating) => {
+interface StudentCardProps {
+  student: any;
+  onPress?: () => void;
+  matchScore?: number;
+}
+
+const StudentCard: React.FC<StudentCardProps> = ({ student, onPress, matchScore }) => {
+    const renderStars = (rating: number): string => {
         const fullStars = Math.floor(rating);
         let stars = '';
         for (let i = 0; i < fullStars; i++) stars += '⭐';
@@ -37,7 +43,7 @@ const StudentCard = ({ student, onPress, matchScore }) => {
             </View>
             
             <View style={styles.skillsContainer}>
-                {topSkills.map((skill, index) => (
+                {topSkills.map((skill: any, index: number) => (
                     <View 
                         key={index} 
                         style={[

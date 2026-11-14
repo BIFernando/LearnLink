@@ -3,13 +3,14 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+// 🔴 ඔයාගේ Firebase Console එකේ "Project settings" එකේ තියෙන ඇත්ත details මෙතන දාන්න
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+    apiKey: "YOUR_ACTUAL_API_KEY",
+    authDomain: "YOUR_ACTUAL_AUTH_DOMAIN",
+    projectId: "YOUR_ACTUAL_PROJECT_ID",
+    storageBucket: "YOUR_ACTUAL_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID",
+    appId: "YOUR_ACTUAL_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);

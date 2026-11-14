@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MatchingService } from '../../config/matching.service';
+import { MatchingService } from '../../services/member3/matchingService';
 import { auth } from '../../config/firebase';
 import { useMatches } from '../../hooks/useMatches';
 import { colors } from '../../components/member3/matching-components';

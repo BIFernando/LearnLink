@@ -1,8 +1,9 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function requireFirebaseEnv(name: string, value: string | undefined): string {
   const normalizedValue = value?.trim();
@@ -47,7 +48,11 @@ export const app =
   getApps().find((existingApp) => existingApp.name === "[DEFAULT]") ??
   initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+// --- FIXED AUTH HERE ---
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});
+
 export const db = getFirestore(app);
 export const functions = getFunctions(app, "asia-south1");
 export const storage = getStorage(app);

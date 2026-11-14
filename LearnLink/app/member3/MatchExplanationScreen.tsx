@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressBar } from '../../components/member3/matching-components';
-import { MatchingService } from '../../config/matching.service';
+import { MatchingService } from '../../services/member3/matchingService';
 import { auth } from '../../config/firebase';
 import type { IMatch, IUser } from '../../../src/types/matching.types';
 

@@ -59,8 +59,8 @@ Owner: Member 5 (imChamikara) · Branch: `feature/member5-chat-notifications-gam
 - [x] 3. **Notifications** screen + routing by type (chips, mark read / all, dismiss, type actions). Notifications are created by Cloud Functions (section 9)
 - [x] 4. **Reviews**: Give Review (COMPLETED sessions only, one per reviewer per session via deterministic doc id `${sessionId}_${reviewerId}`), View Reviews
 - [x] 5. **Progress / XP** screen (also the Gamification Hub: links to Badges, Challenges, Leaderboard, My Reviews)
-- [ ] 6. **Badges** screen
-- [ ] 7. **Leaderboard** (All Time)
+- [x] 6. **Badges** screen (earned vs locked, progress per requirement, filter chips)
+- [x] 7. **Leaderboard** (All Time; Weekly/Monthly shown disabled)
 - [ ] 8. **Challenges** list + play + `submitChallengeAttempt` callable
 - [ ] 9. **Cloud Functions** in `functions/src/member5/` (see §5)
 - [ ] 10. Rules + indexes proposal: `docs/member5-firestore-rules.md` + `firestore.indexes.json`

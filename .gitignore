@@ -1,0 +1,12 @@
+# Secrets
+.env*
+!.env.example
+service-account*.json
+**/service-account*.json
+
+# Dependencies and build output
+node_modules/
+.expo/
+dist/
+functions/lib/
+**/functions/lib/

@@ -326,6 +326,21 @@ export default function SessionDetailsScreen() {
         </Text>
       )}
 
+      {/* Member 5: review entry point */}
+      {isParticipant && session.status === "COMPLETED" && (
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() =>
+            router.push({
+              pathname: "/reviews/give/[sessionId]",
+              params: { sessionId: session.id },
+            })
+          }
+        >
+          <Text style={styles.buttonText}>Give Review</Text>
+        </TouchableOpacity>
+      )}
+
       {isParticipant && canCancel && (
         <TouchableOpacity
           style={styles.cancelButton}

@@ -229,3 +229,6 @@ export const verifyAttendanceQr = onCall(
     });
   }
 );
+
+// Member 5: Chat, Notifications, Gamification
+export * from "./member5";

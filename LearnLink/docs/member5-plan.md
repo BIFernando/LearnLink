@@ -56,7 +56,7 @@ Owner: Member 5 (imChamikara) · Branch: `feature/member5-chat-notifications-gam
 - [x] 0a. Blockers: root `.gitignore`, `.env` moved to `LearnLink/`, `firebase.json` comma, users rule protects server-managed fields
 - [x] 1. **Foundation**: `types/member5.ts`, `functions/src/member5/xpRules.ts`, `constants/member5Theme.ts`, `components/member5/ui.tsx`, `services/member5/{format,userService}.ts`
 - [x] 2. **Chat** upgrade: unread badge, mark-all-read, chips, search, pagination, date separators, read ticks, quick replies, upcoming-session card, `getOrCreateConversation(exchangeRequestId, participantIds)`, New Chat screen (`app/chat/new.tsx`). Not built: online presence, file attachments, calls
-- [ ] 3. **Notifications** screen + routing by type
+- [x] 3. **Notifications** screen + routing by type (chips, mark read / all, dismiss, type actions). Notifications are created by Cloud Functions (section 9)
 - [ ] 4. **Reviews**: Give Review (COMPLETED sessions only, one per reviewer per session via deterministic doc id `${sessionId}_${reviewerId}`), View Reviews
 - [ ] 5. **Progress / XP** screen
 - [ ] 6. **Badges** screen

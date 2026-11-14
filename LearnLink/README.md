@@ -103,18 +103,22 @@ Firebase project with:
 firebase deploy --only firestore:rules
 ```
 
-Before deploying, validate the rules against the project's existing data and
-exercise the admin and member flows in the Firebase Emulator Suite. In
-particular, verify that a normal account is redirected from `/admin`, an
-admin account can reach the protected route, sign-out returns to the login
-screen, and direct Firestore requests without the admin claim are denied.
+Run `npm run test:rules` to build the Cloud Functions and test the rules and
+callable workflows against the local Firestore Emulator. The test command uses
+the `demo-learnlink` project ID and does not deploy anything.
 
-The existing Member 4 credit-completion flow updates both participants'
-`skillCredits` from one client transaction. These rules restrict profile
-updates to the profile owner or an admin, so that cross-user credit transfer
-will be denied. Move that operation to a trusted backend before deploying
-these rules if credit exchanges must remain enabled; do not weaken the profile
-rules to let clients edit another user's balance.
+Member 4 credit completion now calls the trusted `completeCreditSession`
+function. It confirms both participants, verifies the accepted credit exchange
+and balance, then atomically updates the balances, session, and ledger. Client
+writes to `skillCredits` and `creditTransactions` are denied. Deploy the updated
+Functions and release the updated app before enforcing these rules; do not
+restore the old client-side balance writes.
+
+Signed-in users can still read `users` and `userSkills` because Member 3
+matching currently reads these collections broadly. Firestore rules cannot hide
+individual fields in a readable document, so profile data stored alongside
+matching fields remains visible to authenticated users. Separate private
+profile fields from the matching profile before restricting those reads.
 
 The admin dashboard reads document counts from `users`, `skills`, and
 `exchangeRequests`, and reads the latest exchange requests using their

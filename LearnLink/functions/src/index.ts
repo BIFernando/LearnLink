@@ -1,4 +1,4 @@
-import { moderateReport, submitReport } from "./reports";
+export { moderateReport, submitReport } from "./reports";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import {
@@ -40,6 +40,236 @@ export const healthCheck = onCall(callableOptions, (request) => {
   const uid = requireAuthenticatedUid(request.auth?.uid);
   return { status: "ok", uid };
 });
+
+export const completeCreditSession = onCall(
+  callableOptions,
+  async (request) => {
+    const uid = requireAuthenticatedUid(request.auth?.uid);
+    const data: unknown = request.data;
+
+    if (
+      !isRecord(data) ||
+      Object.keys(data).length !== 1 ||
+      !Object.prototype.hasOwnProperty.call(data, "sessionId") ||
+      !isValidSessionId(data.sessionId)
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Only a valid sessionId is accepted."
+      );
+    }
+
+    const sessionId = data.sessionId;
+    const sessionRef = firestore.collection("sessions").doc(sessionId);
+
+    return firestore.runTransaction(async (transaction) => {
+      const sessionSnapshot = await transaction.get(sessionRef);
+      if (!sessionSnapshot.exists) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+
+      const session = sessionSnapshot.data();
+      const teacherId = session?.teacherId;
+      const learnerId = session?.learnerId;
+      if (
+        typeof teacherId !== "string" ||
+        typeof learnerId !== "string" ||
+        (uid !== teacherId && uid !== learnerId)
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Only a session participant can confirm completion."
+        );
+      }
+
+      if (
+        session?.status === "COMPLETED" &&
+        session.creditsTransferred === true
+      ) {
+        return { result: "COMPLETED_WITH_CREDITS" as const };
+      }
+
+      if (!["CONFIRMED", "IN_PROGRESS"].includes(session?.status)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The session is not ready for completion confirmation."
+        );
+      }
+
+      const exchangeRequestId = session?.exchangeRequestId;
+      if (!isValidSessionId(exchangeRequestId)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The session has an invalid exchange request."
+        );
+      }
+
+      const exchangeRef = firestore
+        .collection("exchangeRequests")
+        .doc(exchangeRequestId);
+      const exchangeSnapshot = await transaction.get(exchangeRef);
+      if (!exchangeSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The exchange request for this session was not found."
+        );
+      }
+
+      const exchange = exchangeSnapshot.data();
+      if (
+        exchange?.status !== "ACCEPTED" ||
+        exchange.exchangeType !== "CREDIT" ||
+        exchange.creditAmount !== 10
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The session is not part of an accepted credit exchange."
+        );
+      }
+
+      const offeredSkillSession =
+        exchange.senderId === teacherId &&
+        exchange.receiverId === learnerId &&
+        exchange.offeredSkillId === session?.skillId;
+      const requestedSkillSession =
+        exchange.senderId === learnerId &&
+        exchange.receiverId === teacherId &&
+        exchange.requestedSkillId === session?.skillId;
+      if (!offeredSkillSession && !requestedSkillSession) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The session does not match the accepted exchange."
+        );
+      }
+
+      const completedBy = session?.completedBy;
+      const participants = [teacherId, learnerId];
+      if (
+        !Array.isArray(completedBy) ||
+        completedBy.length > participants.length ||
+        completedBy.some(
+          (participant) =>
+            typeof participant !== "string" ||
+            !participants.includes(participant)
+        ) ||
+        new Set(completedBy).size !== completedBy.length
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The session completion confirmations are invalid."
+        );
+      }
+
+      const confirmedBy = completedBy.includes(uid)
+        ? completedBy
+        : [...completedBy, uid];
+      const bothConfirmed = participants.every((participant) =>
+        confirmedBy.includes(participant)
+      );
+
+      if (!bothConfirmed) {
+        if (confirmedBy.length !== completedBy.length) {
+          transaction.update(sessionRef, {
+            completedBy: confirmedBy,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        return { result: "WAITING_FOR_OTHER" as const };
+      }
+
+      const teacherRef = firestore.collection("users").doc(teacherId);
+      const learnerRef = firestore.collection("users").doc(learnerId);
+      const earnRef = firestore
+        .collection("creditTransactions")
+        .doc(`${sessionId}_EARN`);
+      const spendRef = firestore
+        .collection("creditTransactions")
+        .doc(`${sessionId}_SPEND`);
+      const [
+        teacherSnapshot,
+        learnerSnapshot,
+        earnSnapshot,
+        spendSnapshot,
+      ] = await Promise.all([
+        transaction.get(teacherRef),
+        transaction.get(learnerRef),
+        transaction.get(earnRef),
+        transaction.get(spendRef),
+      ]);
+
+      if (!teacherSnapshot.exists || !learnerSnapshot.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "A participant profile could not be found."
+        );
+      }
+      if (earnSnapshot.exists || spendSnapshot.exists) {
+        throw new HttpsError(
+          "already-exists",
+          "Credit transactions already exist for this session."
+        );
+      }
+
+      const teacherCredits = teacherSnapshot.get("skillCredits");
+      const learnerCredits = learnerSnapshot.get("skillCredits");
+      const currentTeacherCredits =
+        teacherCredits === undefined ? 0 : teacherCredits;
+      const currentLearnerCredits =
+        learnerCredits === undefined ? 0 : learnerCredits;
+      if (
+        !Number.isSafeInteger(currentTeacherCredits) ||
+        currentTeacherCredits < 0 ||
+        !Number.isSafeInteger(currentLearnerCredits) ||
+        currentLearnerCredits < 0
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "A participant has an invalid skill-credit balance."
+        );
+      }
+      if (currentLearnerCredits < 10) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The learner has insufficient credits."
+        );
+      }
+
+      const timestamp = FieldValue.serverTimestamp();
+      transaction.update(learnerRef, {
+        skillCredits: currentLearnerCredits - 10,
+        updatedAt: timestamp,
+      });
+      transaction.update(teacherRef, {
+        skillCredits: currentTeacherCredits + 10,
+        updatedAt: timestamp,
+      });
+      transaction.create(earnRef, {
+        userId: teacherId,
+        amount: 10,
+        type: "EARN",
+        referenceId: sessionId,
+        description: `Credits earned for completed session ${sessionId}.`,
+        createdAt: timestamp,
+      });
+      transaction.create(spendRef, {
+        userId: learnerId,
+        amount: 10,
+        type: "SPEND",
+        referenceId: sessionId,
+        description: `Credits spent for completed session ${sessionId}.`,
+        createdAt: timestamp,
+      });
+      transaction.update(sessionRef, {
+        completedBy: participants,
+        status: "COMPLETED",
+        creditsTransferred: true,
+        updatedAt: timestamp,
+      });
+
+      return { result: "COMPLETED_WITH_CREDITS" as const };
+    });
+  }
+);
 
 export const generateAttendanceQr = onCall(
   callableOptions,
@@ -229,3 +459,6 @@ export const verifyAttendanceQr = onCall(
     });
   }
 );
+
+// Member 5: Chat, Notifications, Gamification
+export * from "./member5";

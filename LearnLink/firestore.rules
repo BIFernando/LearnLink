@@ -7,7 +7,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && request.auth.token.admin == true;
+      return signedIn()
+        && request.auth.token.keys().hasAny(['admin'])
+        && request.auth.token.admin == true;
     }
 
     function ownsUser(userId) {
@@ -24,6 +26,10 @@ service cloud.firestore {
       return signedIn()
         && (data.teacherId == request.auth.uid
           || data.learnerId == request.auth.uid);
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
     }
 
     function sessionExchange(data) {
@@ -45,14 +51,77 @@ service cloud.firestore {
         );
     }
 
-    function hasCreditTransaction(sessionId, suffix, transactionType, userId) {
-      let transaction = getAfter(
-        /databases/$(database)/documents/creditTransactions/$(sessionId + suffix)
-      ).data;
-      return transaction.referenceId == sessionId
-        && transaction.type == transactionType
-        && transaction.amount == 10
-        && transaction.userId == userId;
+    function protectedUserFields() {
+      return [
+        'admin', 'isAdmin', 'role', 'isActive', 'skillCredits',
+        'suspended', 'suspendedAt', 'suspendedBy', 'isSuspended'
+      ];
+    }
+
+    function validExchangeRequest(data) {
+      return data.keys().hasOnly([
+          'senderId', 'receiverId', 'exchangeType', 'offeredSkillId',
+          'requestedSkillId', 'creditAmount', 'message', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && isNonEmptyString(data.senderId)
+        && isNonEmptyString(data.receiverId)
+        && data.senderId != data.receiverId
+        && isNonEmptyString(data.offeredSkillId)
+        && isNonEmptyString(data.requestedSkillId)
+        && data.offeredSkillId != data.requestedSkillId
+        && data.exchangeType in ['DIRECT', 'CREDIT']
+        && data.creditAmount is int
+        && (
+          (data.exchangeType == 'DIRECT' && data.creditAmount == 0)
+          || (data.exchangeType == 'CREDIT' && data.creditAmount == 10)
+        )
+        && data.message is string;
+    }
+
+    function validSession(data) {
+      return data.keys().hasOnly([
+          'exchangeRequestId', 'teacherId', 'learnerId', 'skillId',
+          'scheduledAt', 'duration', 'sessionType', 'location', 'meetingLink',
+          'status', 'completedBy', 'createdAt', 'updatedAt'
+        ])
+        && isNonEmptyString(data.exchangeRequestId)
+        && isNonEmptyString(data.teacherId)
+        && isNonEmptyString(data.learnerId)
+        && data.teacherId != data.learnerId
+        && isNonEmptyString(data.skillId)
+        && data.scheduledAt is timestamp
+        && data.duration is int
+        && data.duration >= 15
+        && data.duration <= 240
+        && data.sessionType in ['ONLINE', 'IN_PERSON']
+        && (!data.keys().hasAny(['location']) || data.location is string)
+        && (!data.keys().hasAny(['meetingLink']) || data.meetingLink is string)
+        && (
+          (data.sessionType == 'ONLINE'
+            && data.keys().hasAny(['meetingLink'])
+            && isNonEmptyString(data.meetingLink))
+          || (data.sessionType == 'IN_PERSON'
+            && data.keys().hasAny(['location'])
+            && isNonEmptyString(data.location))
+        )
+        && data.status == 'PROPOSED'
+        && data.completedBy is list
+        && data.completedBy.size() == 0
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function validCatalogRecord(data, isCategory) {
+      return isNonEmptyString(data.name)
+        && data.name.size() <= 100
+        && (!data.keys().hasAny(['description'])
+          || data.description == null
+          || (data.description is string && data.description.size() <= 1000))
+        && (!data.keys().hasAny(['categoryId'])
+          || data.categoryId == null
+          || data.categoryId is string)
+        && (isCategory || data.keys().hasAny(['categoryId']));
     }
 
     match /admin/{document=**} {
@@ -62,19 +131,91 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if ownsUser(userId)
-        && !request.resource.data.keys().hasAny([
-          'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
-        ]);
-      allow update: if isAdmin()
+        && !request.resource.data.keys().hasAny(protectedUserFields());
+      allow update: if (
+          isAdmin()
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['skillCredits'])
+        )
         || (ownsUser(userId)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(protectedUserFields()));
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
+          ])
+          // Server-managed fields: written only by Cloud Functions (Admin SDK).
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'xp', 'level', 'ratingAverage', 'ratingCount', 'streak', 'skillCredits'
           ]));
       allow delete: if isAdmin();
     }
 
     match /userSkills/{skillId} {
       allow read: if signedIn();
+      allow create: if isAdmin()
+        || (signedIn()
+          && request.resource.data.userId == request.auth.uid
+          && isNonEmptyString(request.resource.data.userId));
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && isNonEmptyString(request.resource.data.userId));
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /skills/{skillId} {
+      allow read: if signedIn();
+      allow create: if isAdmin()
+        && validCatalogRecord(request.resource.data, false)
+        && request.resource.data.keys().hasOnly([
+          'name', 'description', 'categoryId', 'createdAt', 'updatedAt',
+          'createdBy', 'updatedBy'
+        ])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && validCatalogRecord(request.resource.data, false)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'description', 'categoryId', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if signedIn();
+      allow create: if isAdmin()
+        && validCatalogRecord(request.resource.data, true)
+        && request.resource.data.keys().hasOnly([
+          'name', 'description', 'createdAt', 'updatedAt', 'createdBy',
+          'updatedBy'
+        ])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && validCatalogRecord(request.resource.data, true)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'description', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /matches/{matchId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
       allow create: if isAdmin()
         || (signedIn() && request.resource.data.userId == request.auth.uid);
       allow update: if isAdmin()
@@ -85,32 +226,16 @@ service cloud.firestore {
         || (signedIn() && resource.data.userId == request.auth.uid);
     }
 
-    match /skills/{skillId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /categories/{categoryId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /matches/{matchId} {
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin()
-        || (signedIn() && request.resource.data.userId == request.auth.uid);
-      allow update, delete: if isAdmin()
-        || (signedIn() && resource.data.userId == request.auth.uid);
-    }
-
     match /exchangeRequests/{requestId} {
       allow read: if isAdmin() || isExchangeParticipant(resource.data);
       allow create: if isAdmin()
         || (signedIn()
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.receiverId != request.auth.uid
-          && request.resource.data.status == 'PENDING');
+          && request.resource.data.status == 'PENDING'
+          && validExchangeRequest(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time);
       allow update: if isAdmin()
         || (isExchangeParticipant(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
@@ -132,8 +257,7 @@ service cloud.firestore {
       allow read: if isAdmin() || isSessionParticipant(resource.data);
       allow create: if isAdmin()
         || (isSessionParticipant(request.resource.data)
-          && request.resource.data.completedBy == []
-          && request.resource.data.status == 'PROPOSED'
+          && validSession(request.resource.data)
           && belongsToAcceptedExchange(request.resource.data));
       allow update: if isAdmin()
         || (isSessionParticipant(resource.data)
@@ -179,18 +303,8 @@ service cloud.firestore {
               ])
               && request.resource.data.completedBy.size() == 2
               && belongsToAcceptedExchange(resource.data)
-              && request.resource.data.creditsTransferred
-                == (sessionExchange(resource.data).exchangeType == 'CREDIT')
-              && (
-                request.resource.data.creditsTransferred != true
-                || (
-                  hasCreditTransaction(
-                    sessionId, '_EARN', 'EARN', resource.data.teacherId
-                  )
-                  && hasCreditTransaction(
-                    sessionId, '_SPEND', 'SPEND', resource.data.learnerId
-                  )
-                )))
+              && sessionExchange(resource.data).exchangeType == 'DIRECT'
+              && request.resource.data.creditsTransferred == false)
           ));
       allow delete: if isAdmin();
     }
@@ -198,46 +312,7 @@ service cloud.firestore {
     match /creditTransactions/{transactionId} {
       allow read: if isAdmin()
         || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin()
-        || (signedIn()
-          && request.resource.data.referenceId is string
-          && request.resource.data.amount == 10
-          && existsAfter(
-            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-          )
-          && getAfter(
-            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-          ).data.status == 'COMPLETED'
-          && getAfter(
-            /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-          ).data.creditsTransferred == true
-          && (
-            (transactionId
-              == request.resource.data.referenceId + '_EARN'
-              && request.resource.data.type == 'EARN'
-              && request.resource.data.userId
-                == getAfter(
-                  /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-                ).data.teacherId)
-            || (transactionId
-              == request.resource.data.referenceId + '_SPEND'
-              && request.resource.data.type == 'SPEND'
-              && request.resource.data.userId
-                == getAfter(
-                  /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-                ).data.learnerId)
-          )
-          && isSessionParticipant(
-            getAfter(
-              /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-            ).data
-          )
-          && belongsToAcceptedExchange(
-            getAfter(
-              /databases/$(database)/documents/sessions/$(request.resource.data.referenceId)
-            ).data
-          ));
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /reports/{reportId} {
@@ -249,6 +324,154 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create, update, delete: if false;
       }
+    }
+
+    // =====================================================================
+    // Member 5: Chat, Notifications, Gamification
+    // Cloud Functions (Admin SDK) bypass these rules. XP, levels, ratings,
+    // badges, attempts and notifications are written only by functions.
+    // =====================================================================
+
+    function conversationData(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+    }
+
+    function isConversationParticipant(conversation) {
+      return signedIn() && request.auth.uid in conversation.participantIds;
+    }
+
+    function acceptedExchangeBetween(requestId, participantIds) {
+      let exchange = get(
+        /databases/$(database)/documents/exchangeRequests/$(requestId)
+      ).data;
+      return exchange.status in ['ACCEPTED', 'COMPLETED']
+        && participantIds.hasAll([exchange.senderId, exchange.receiverId]);
+    }
+
+    function reviewableSession(sessionId, revieweeId) {
+      let session = get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+      return session.status == 'COMPLETED'
+        && ((session.teacherId == request.auth.uid && session.learnerId == revieweeId)
+          || (session.learnerId == request.auth.uid && session.teacherId == revieweeId));
+    }
+
+    // Conversation id == exchangeRequestId (one chat per accepted exchange).
+    match /conversations/{conversationId} {
+      allow read: if signedIn()
+        && (resource == null || request.auth.uid in resource.data.participantIds);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'participantIds', 'exchangeRequestId', 'lastMessage',
+          'lastMessageAt', 'createdAt', 'unreadCounts'
+        ])
+        && request.resource.data.exchangeRequestId == conversationId
+        && request.resource.data.participantIds.size() == 2
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.lastMessage == ''
+        && request.resource.data.unreadCounts.keys()
+          .hasOnly(request.resource.data.participantIds)
+        && request.resource.data.unreadCounts[request.resource.data.participantIds[0]] == 0
+        && request.resource.data.unreadCounts[request.resource.data.participantIds[1]] == 0
+        && acceptedExchangeBetween(conversationId, request.resource.data.participantIds);
+      // A participant may only reset their own unread count to 0.
+      allow update: if isConversationParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts'])
+        && request.resource.data.unreadCounts[request.auth.uid] == 0
+        && (
+          (!('unreadCounts' in resource.data)
+            && request.resource.data.unreadCounts.keys().hasOnly([request.auth.uid]))
+          || ('unreadCounts' in resource.data
+            && request.resource.data.unreadCounts.diff(resource.data.unreadCounts)
+              .affectedKeys().hasOnly([request.auth.uid]))
+        );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isConversationParticipant(conversationData(conversationId));
+        allow create: if isConversationParticipant(conversationData(conversationId))
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'isRead'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.isRead == false;
+        // The recipient may mark a message as read; nothing else changes.
+        allow update: if isConversationParticipant(conversationData(conversationId))
+          && resource.data.senderId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+          && request.resource.data.isRead == true;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+        && request.resource.data.isRead == true;
+      allow create: if false;
+    }
+
+    // Review id == `${sessionId}_${reviewerId}`: one review per reviewer per session.
+    match /reviews/{reviewId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && reviewId == request.resource.data.sessionId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'sessionId', 'reviewerId', 'revieweeId', 'rating', 'comment', 'tags', 'createdAt'
+        ])
+        && request.resource.data.reviewerId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.comment.size() <= 500
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() <= 6
+        && request.resource.data.createdAt == request.time
+        && reviewableSession(request.resource.data.sessionId, request.resource.data.revieweeId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /challenges/{challengeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Answer keys: Cloud Functions only. Never readable by clients.
+    match /challengeAnswers/{challengeId} {
+      allow read, write: if false;
+    }
+
+    match /challengeAttempts/{attemptId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /badges/{badgeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /userBadges/{userBadgeId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /xpTransactions/{transactionId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /pushTokens/{userId} {
+      allow read, delete: if ownsUser(userId);
+      allow create, update: if ownsUser(userId)
+        && request.resource.data.keys().hasOnly(['userId', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.userId == userId
+        && request.resource.data.token is string
+        && request.resource.data.platform in ['ios', 'android', 'web'];
     }
   }
 }

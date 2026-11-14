@@ -45,6 +45,11 @@ export default function RootLayout() {
         options={{ headerShown: false }}
       />
 
+      {/* Member 5 */}
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="reviews" options={{ headerShown: false }} />
+      <Stack.Screen name="gamification" options={{ headerShown: false }} />
+
       <Stack.Screen
         name="admin"
         options={{

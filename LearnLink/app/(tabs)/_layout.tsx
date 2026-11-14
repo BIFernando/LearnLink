@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { Ionicons } from '@expo/vector-icons';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -28,6 +29,15 @@ export default function TabLayout() {
         options={{
           title: 'Explore',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+        }}
+      
+      />
+        <Tabs.Screen
+        name="matches"
+        options={{
+          title: 'Matches',
+          // Use the Ionicons puzzle piece here:
+          tabBarIcon: ({ color }) => <Ionicons size={28} name="extension-puzzle" color={color} />,
         }}
       />
     </Tabs>

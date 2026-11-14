@@ -8,5 +8,46 @@ service-account*.json
 node_modules/
 .expo/
 dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+
+# Environment variables
+.env
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase functions build output
 functions/lib/
 **/functions/lib/

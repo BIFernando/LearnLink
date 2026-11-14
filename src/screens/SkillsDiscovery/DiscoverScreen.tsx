@@ -1,36 +1,38 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Image, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+    View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, 
+    SafeAreaView, Image, Alert, ActivityIndicator 
+} from 'react-native';
+import { fetchAllSkills } from '../../services/skillService';
 
 interface DiscoverScreenProps { navigation?: any; }
-interface Discipline { name: string; icon: string; color: string; }
-interface TrendingSkill { name: string; peers: number; icon: string; }
-interface Tutor { id: string; name: string; role: string; offering: string; seeking: string; distance: string; location: string; }
 
 const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ navigation = null }) => {
     const [searchText, setSearchText] = useState<string>('');
+    const [dbSkills, setDbSkills] = useState<any[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
 
-    const disciplines: Discipline[] = [
-        { name: 'Tech & Code', icon: '💻', color: '#E3F2FD' },
-        { name: 'Design & UI', icon: '🎨', color: '#FCE4EC' },
-        { name: 'Languages', icon: '🌍', color: '#E8F5E9' },
-        { name: 'Business', icon: '📊', color: '#FFF3E0' },
-    ];
-
-    const trendingSkills: TrendingSkill[] = [
-        { name: 'Python', peers: 142, icon: '🐍' },
-        { name: 'Figma Design', peers: 98, icon: '🎨' },
-        { name: 'Conversational Spanish', peers: 76, icon: '🇪🇸' },
-        { name: 'Organic Chem', peers: 54, icon: '🧪' },
-    ];
-
-    const nearbyTutors: Tutor[] = [
-        { id: '1', name: 'Maya Chen', role: 'Junior, Design', offering: 'UI/UX & Figma Expert', seeking: 'Intro to Python', distance: '0.4 miles', location: 'Campus Library' },
-        { id: '2', name: 'Liam K.', role: 'Sophomore, Pre-Med', offering: 'Organic Chem I & II Advanced', seeking: 'Guitar Chords / Music Theory', distance: '0.7 miles', location: 'Science Quad Cafe' },
-    ];
+    // Database එකෙන් දත්ත ගන්න
+    useEffect(() => {
+        const loadSkills = async () => {
+            try {
+                const skills = await fetchAllSkills();
+                setDbSkills(skills);
+            } catch (error) {
+                console.error("Error fetching skills:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadSkills();
+    }, []);
 
     const goTo = (screen: string, params?: object): void => {
-        if (navigation && typeof navigation.navigate === 'function') { navigation.navigate(screen, params); }
-        else { Alert.alert('Coming Soon', 'The ' + screen + ' screen will be available soon!'); }
+        if (navigation && typeof navigation.navigate === 'function') { 
+            navigation.navigate(screen, params); 
+        } else { 
+            Alert.alert('Coming Soon', 'The ' + screen + ' screen will be available soon!'); 
+        }
     };
 
     return (
@@ -40,9 +42,17 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ navigation = null }) =>
                     <Text style={styles.headerTitle}>Campus Swap Hub</Text>
                     <Text style={styles.headerSubtitle}>What do you want to learn or teach today?</Text>
                 </View>
+                
                 <View style={styles.searchContainer}>
-                    <TextInput style={styles.searchInput} placeholder="Try 'Python', 'Calculus', 'Guitar'..." placeholderTextColor="#999" value={searchText} onChangeText={setSearchText} />
+                    <TextInput 
+                        style={styles.searchInput} 
+                        placeholder="Try 'Python', 'Calculus', 'Guitar'..." 
+                        placeholderTextColor="#999" 
+                        value={searchText} 
+                        onChangeText={setSearchText} 
+                    />
                 </View>
+                
                 <View style={styles.alertCard}>
                     <View style={styles.alertTopRow}>
                         <Text style={styles.alertTitle}>🔥 HIGH MATCH ALERT!</Text>
@@ -52,7 +62,9 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ navigation = null }) =>
                         <Image source={{ uri: 'https://i.pravatar.cc/100?img=12' }} style={styles.alertAvatar} />
                         <View style={styles.alertInfo}>
                             <Text style={styles.alertName}>Alex R. • CS Major (Junior)</Text>
-                            <Text style={styles.alertDescription}>Alex teaches <Text style={styles.highlightGreen}>Python</Text> and wants your <Text style={styles.highlightPurple}>Figma UI Design</Text>!</Text>
+                            <Text style={styles.alertDescription}>
+                                Alex teaches <Text style={styles.highlightGreen}>Python</Text> and wants your <Text style={styles.highlightPurple}>Figma UI Design</Text>!
+                            </Text>
                             <Text style={styles.alertTime}>Free after 3 PM today</Text>
                         </View>
                     </View>
@@ -60,45 +72,45 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ navigation = null }) =>
                         <Text style={styles.viewMatchText}>View Match</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Explore Disciplines */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Explore Disciplines</Text>
                     <View style={styles.disciplinesGrid}>
-                        {disciplines.map((item, index) => (
-                            <TouchableOpacity key={index} style={[styles.disciplineCard, { backgroundColor: item.color }]}>
-                                <Text style={styles.disciplineIcon}>{item.icon}</Text>
-                                <Text style={styles.disciplineName}>{item.name}</Text>
+                        {['Tech & Code', 'Design & UI', 'Languages', 'Business'].map((item, index) => (
+                            <TouchableOpacity key={index} style={styles.disciplineCard}>
+                                <Text style={styles.disciplineName}>{item}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
                 </View>
+
+                {/* Trending Skills - දැන් database එකෙන්! */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Trending Skills on Campus</Text>
-                    <View style={styles.trendingCard}>
-                        {trendingSkills.map((skill, index) => (
-                            <View key={index} style={[styles.trendingItem, index === trendingSkills.length - 1 && styles.trendingItemLast]}>
-                                <Text style={styles.trendingIcon}>{skill.icon}</Text>
-                                <Text style={styles.trendingName}>{skill.name}</Text>
-                                <Text style={styles.trendingPeers}>{skill.peers} peers</Text>
-                            </View>
-                        ))}
-                    </View>
+                    {loading ? (
+                        <ActivityIndicator size="small" color="#6C63FF" style={{ marginTop: 10 }} />
+                    ) : (
+                        <View style={styles.trendingCard}>
+                            {dbSkills.map((skill, index) => (
+                                <View key={index} style={[styles.trendingItem, index === dbSkills.length - 1 && styles.trendingItemLast]}>
+                                    <Text style={styles.trendingName}>{skill.name || 'Unnamed Skill'}</Text>
+                                    <Text style={styles.trendingPeers}>{skill.category || 'General'}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
+
+                {/* Nearby Tutors */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Nearby Tutors & Partners</Text>
                     <Text style={styles.sectionSubtitle}>Active now around your halls</Text>
-                    {nearbyTutors.map((tutor) => (
-                        <TouchableOpacity key={tutor.id} style={styles.tutorCard} onPress={() => goTo('StudentProfile', { userId: tutor.id })}>
-                            <Image source={{ uri: 'https://i.pravatar.cc/100?img=' + (tutor.id === '1' ? 5 : 8) }} style={styles.tutorAvatar} />
-                            <View style={styles.tutorInfo}>
-                                <Text style={styles.tutorName}>{tutor.name}</Text>
-                                <Text style={styles.tutorRole}>{tutor.role}</Text>
-                                <Text style={styles.offeringText}>OFFERING {tutor.offering}</Text>
-                                <Text style={styles.seekingText}>SEEKING {tutor.seeking}</Text>
-                                <Text style={styles.tutorLocation}>{tutor.distance} • {tutor.location}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
+                    <View style={styles.emptyBox}>
+                        <Text style={styles.emptyText}>Coming soon...</Text>
+                    </View>
                 </View>
+
                 <TouchableOpacity style={styles.addSkillButton} onPress={() => goTo('SkillManagement')}>
                     <View style={styles.plusCircle}><Text style={styles.plusText}>+</Text></View>
                     <View style={styles.addSkillTextContainer}>
@@ -138,23 +150,15 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#1A1A2E', marginBottom: 12 },
     sectionSubtitle: { fontSize: 14, color: '#666', marginTop: -8, marginBottom: 12 },
     disciplinesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    disciplineCard: { width: '48%', padding: 18, borderRadius: 16, alignItems: 'center', marginBottom: 12 },
-    disciplineIcon: { fontSize: 28, marginBottom: 8 },
+    disciplineCard: { width: '48%', padding: 18, borderRadius: 16, backgroundColor: '#E3F2FD', alignItems: 'center', marginBottom: 12 },
     disciplineName: { fontSize: 14, fontWeight: '600', color: '#1A1A2E' },
     trendingCard: { backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16 },
     trendingItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
     trendingItemLast: { borderBottomWidth: 0 },
-    trendingIcon: { fontSize: 20, marginRight: 12 },
     trendingName: { flex: 1, fontSize: 15, color: '#1A1A2E', fontWeight: '500' },
     trendingPeers: { fontSize: 14, color: '#6C63FF', fontWeight: '700' },
-    tutorCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', elevation: 2 },
-    tutorAvatar: { width: 65, height: 65, borderRadius: 32 },
-    tutorInfo: { marginLeft: 14, flex: 1 },
-    tutorName: { fontSize: 16, fontWeight: 'bold', color: '#1A1A2E' },
-    tutorRole: { fontSize: 12, color: '#666', marginTop: 2 },
-    offeringText: { fontSize: 12, color: '#4CAF50', fontWeight: '700', marginTop: 8 },
-    seekingText: { fontSize: 12, color: '#6C63FF', fontWeight: '700', marginTop: 3 },
-    tutorLocation: { fontSize: 12, color: '#999', marginTop: 6 },
+    emptyBox: { backgroundColor: '#fff', borderRadius: 16, padding: 20, alignItems: 'center' },
+    emptyText: { fontSize: 14, color: '#999' },
     addSkillButton: { backgroundColor: '#6C63FF', marginHorizontal: 20, borderRadius: 20, padding: 20, flexDirection: 'row', alignItems: 'center' },
     plusCircle: { width: 45, height: 45, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     plusText: { fontSize: 28, color: '#fff', fontWeight: '300', marginTop: -3 },

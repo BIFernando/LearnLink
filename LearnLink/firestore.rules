@@ -254,5 +254,153 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
     }
+
+    // =====================================================================
+    // Member 5: Chat, Notifications, Gamification
+    // Cloud Functions (Admin SDK) bypass these rules. XP, levels, ratings,
+    // badges, attempts and notifications are written only by functions.
+    // =====================================================================
+
+    function conversationData(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+    }
+
+    function isConversationParticipant(conversation) {
+      return signedIn() && request.auth.uid in conversation.participantIds;
+    }
+
+    function acceptedExchangeBetween(requestId, participantIds) {
+      let exchange = get(
+        /databases/$(database)/documents/exchangeRequests/$(requestId)
+      ).data;
+      return exchange.status in ['ACCEPTED', 'COMPLETED']
+        && participantIds.hasAll([exchange.senderId, exchange.receiverId]);
+    }
+
+    function reviewableSession(sessionId, revieweeId) {
+      let session = get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+      return session.status == 'COMPLETED'
+        && ((session.teacherId == request.auth.uid && session.learnerId == revieweeId)
+          || (session.learnerId == request.auth.uid && session.teacherId == revieweeId));
+    }
+
+    // Conversation id == exchangeRequestId (one chat per accepted exchange).
+    match /conversations/{conversationId} {
+      allow read: if signedIn()
+        && (resource == null || request.auth.uid in resource.data.participantIds);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'participantIds', 'exchangeRequestId', 'lastMessage',
+          'lastMessageAt', 'createdAt', 'unreadCounts'
+        ])
+        && request.resource.data.exchangeRequestId == conversationId
+        && request.resource.data.participantIds.size() == 2
+        && request.auth.uid in request.resource.data.participantIds
+        && request.resource.data.lastMessage == ''
+        && request.resource.data.unreadCounts.keys()
+          .hasOnly(request.resource.data.participantIds)
+        && request.resource.data.unreadCounts[request.resource.data.participantIds[0]] == 0
+        && request.resource.data.unreadCounts[request.resource.data.participantIds[1]] == 0
+        && acceptedExchangeBetween(conversationId, request.resource.data.participantIds);
+      // A participant may only reset their own unread count to 0.
+      allow update: if isConversationParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts'])
+        && request.resource.data.unreadCounts[request.auth.uid] == 0
+        && (
+          (!('unreadCounts' in resource.data)
+            && request.resource.data.unreadCounts.keys().hasOnly([request.auth.uid]))
+          || ('unreadCounts' in resource.data
+            && request.resource.data.unreadCounts.diff(resource.data.unreadCounts)
+              .affectedKeys().hasOnly([request.auth.uid]))
+        );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isConversationParticipant(conversationData(conversationId));
+        allow create: if isConversationParticipant(conversationData(conversationId))
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'isRead'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.isRead == false;
+        // The recipient may mark a message as read; nothing else changes.
+        allow update: if isConversationParticipant(conversationData(conversationId))
+          && resource.data.senderId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+          && request.resource.data.isRead == true;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+        && request.resource.data.isRead == true;
+      allow create: if false;
+    }
+
+    // Review id == `${sessionId}_${reviewerId}`: one review per reviewer per session.
+    match /reviews/{reviewId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && reviewId == request.resource.data.sessionId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'sessionId', 'reviewerId', 'revieweeId', 'rating', 'comment', 'tags', 'createdAt'
+        ])
+        && request.resource.data.reviewerId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.comment.size() <= 500
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() <= 6
+        && request.resource.data.createdAt == request.time
+        && reviewableSession(request.resource.data.sessionId, request.resource.data.revieweeId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /challenges/{challengeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Answer keys: Cloud Functions only. Never readable by clients.
+    match /challengeAnswers/{challengeId} {
+      allow read, write: if false;
+    }
+
+    match /challengeAttempts/{attemptId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /badges/{badgeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /userBadges/{userBadgeId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /xpTransactions/{transactionId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /pushTokens/{userId} {
+      allow read, delete: if ownsUser(userId);
+      allow create, update: if ownsUser(userId)
+        && request.resource.data.keys().hasOnly(['userId', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.userId == userId
+        && request.resource.data.token is string
+        && request.resource.data.platform in ['ios', 'android', 'web'];
+    }
   }
 }

@@ -61,7 +61,7 @@ Owner: Member 5 (imChamikara) · Branch: `feature/member5-chat-notifications-gam
 - [x] 5. **Progress / XP** screen (also the Gamification Hub: links to Badges, Challenges, Leaderboard, My Reviews)
 - [x] 6. **Badges** screen (earned vs locked, progress per requirement, filter chips)
 - [x] 7. **Leaderboard** (All Time; Weekly/Monthly shown disabled)
-- [ ] 8. **Challenges** list + play + `submitChallengeAttempt` callable
+- [x] 8. **Challenges** list + play screen with per-question review after submit (grading is the `submitChallengeAttempt` callable, section 9). No countdown timer
 - [ ] 9. **Cloud Functions** in `functions/src/member5/` (see §5)
 - [ ] 10. Rules + indexes proposal: `docs/member5-firestore-rules.md` + `firestore.indexes.json`
 - [ ] 11. Seed script: badges + challenges (`functions/scripts/seedMember5.ts`, Admin SDK)

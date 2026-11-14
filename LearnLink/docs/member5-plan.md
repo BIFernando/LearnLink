@@ -58,7 +58,7 @@ Owner: Member 5 (imChamikara) · Branch: `feature/member5-chat-notifications-gam
 - [x] 2. **Chat** upgrade: unread badge, mark-all-read, chips, search, pagination, date separators, read ticks, quick replies, upcoming-session card, `getOrCreateConversation(exchangeRequestId, participantIds)`, New Chat screen (`app/chat/new.tsx`). Not built: online presence, file attachments, calls
 - [x] 3. **Notifications** screen + routing by type (chips, mark read / all, dismiss, type actions). Notifications are created by Cloud Functions (section 9)
 - [x] 4. **Reviews**: Give Review (COMPLETED sessions only, one per reviewer per session via deterministic doc id `${sessionId}_${reviewerId}`), View Reviews
-- [ ] 5. **Progress / XP** screen
+- [x] 5. **Progress / XP** screen (also the Gamification Hub: links to Badges, Challenges, Leaderboard, My Reviews)
 - [ ] 6. **Badges** screen
 - [ ] 7. **Leaderboard** (All Time)
 - [ ] 8. **Challenges** list + play + `submitChallengeAttempt` callable

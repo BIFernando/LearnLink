@@ -1,7 +1,11 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import {
+  connectFunctionsEmulator,
+  getFunctions,
+} from "firebase/functions";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
 
 function requireFirebaseEnv(name: string, value: string | undefined): string {
   const normalizedValue = value?.trim();
@@ -48,4 +52,18 @@ export const app =
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const functions = getFunctions(app);
 export const storage = getStorage(app);
+
+if (
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === "true"
+) {
+  const emulatorHost =
+    process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST?.trim() || "127.0.0.1";
+
+  connectAuthEmulator(auth, `http://${emulatorHost}:9099`);
+  connectFirestoreEmulator(db, emulatorHost, 8080);
+  connectFunctionsEmulator(functions, emulatorHost, 5001);
+  connectStorageEmulator(storage, emulatorHost, 9199);
+}

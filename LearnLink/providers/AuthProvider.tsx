@@ -13,6 +13,14 @@ import {
 } from "firebase/auth";
 
 import { auth, db } from "@/config/firebase";
+import type { StudentProfileUpdate } from "@/schemas/studentProfile";
+import {
+  saveStudentProfileToFirestore,
+  uploadAndSaveStudentProfilePhoto,
+  type StudentProfilePhotoAsset,
+  type StudentProfilePhotoProgressHandler,
+  type StudentProfilePhotoUploadResult,
+} from "@/services/studentProfileService";
 import type { StudentProfile } from "@/types/auth";
 
 interface AuthContextValue {
@@ -21,6 +29,11 @@ interface AuthContextValue {
   isLoading: boolean;
   isEmailVerified: boolean;
   refreshEmailVerification: () => Promise<boolean>;
+  saveStudentProfile: (profile: StudentProfileUpdate) => Promise<void>;
+  uploadStudentProfilePhoto: (
+    asset: StudentProfilePhotoAsset,
+    onProgress?: StudentProfilePhotoProgressHandler,
+  ) => Promise<StudentProfilePhotoUploadResult>;
   error: string | null;
 }
 
@@ -125,12 +138,69 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return emailVerified;
   }
 
+  async function saveCurrentStudentProfile(
+    profile: StudentProfileUpdate,
+  ): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Sign in before updating your profile.");
+    }
+
+    const updatedProfile = await saveStudentProfileToFirestore(profile);
+
+    if (auth.currentUser?.uid !== currentUser.uid) {
+      return;
+    }
+
+    setStudentProfile((currentProfile) =>
+      currentProfile?.userId === currentUser.uid
+        ? { ...currentProfile, ...updatedProfile }
+        : { userId: currentUser.uid, ...updatedProfile },
+    );
+  }
+
+  async function uploadCurrentStudentProfilePhoto(
+    asset: StudentProfilePhotoAsset,
+    onProgress?: StudentProfilePhotoProgressHandler,
+  ): Promise<StudentProfilePhotoUploadResult> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Sign in before updating your profile picture.");
+    }
+
+    const currentProfile =
+      studentProfile?.userId === currentUser.uid ? studentProfile : null;
+    if (!currentProfile) {
+      throw new Error("Your student profile is not available.");
+    }
+
+    const result = await uploadAndSaveStudentProfilePhoto(
+      asset,
+      typeof currentProfile.profilePhotoUrl === "string"
+        ? currentProfile.profilePhotoUrl
+        : undefined,
+      onProgress,
+    );
+
+    if (auth.currentUser?.uid === currentUser.uid) {
+      setStudentProfile((profile) =>
+        profile?.userId === currentUser.uid
+          ? { ...profile, profilePhotoUrl: result.profilePhotoUrl }
+          : profile,
+      );
+    }
+
+    return result;
+  }
+
   const value: AuthContextValue = {
     user,
     studentProfile,
     isLoading,
     isEmailVerified,
     refreshEmailVerification,
+    saveStudentProfile: saveCurrentStudentProfile,
+    uploadStudentProfilePhoto: uploadCurrentStudentProfilePhoto,
     error,
   };
 

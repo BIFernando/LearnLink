@@ -175,7 +175,7 @@ export const getAcceptedExchanges = async (userId: string): Promise<ExchangeRequ
 
 const skillNameCache = new Map<string, Promise<string | null>>();
 
-const getSkillName = (skillId: string): Promise<string | null> => {
+export const getSkillName = (skillId: string): Promise<string | null> => {
   const cached = skillNameCache.get(skillId);
   if (cached) return cached;
   const request = getDoc(doc(db, 'skills', skillId))

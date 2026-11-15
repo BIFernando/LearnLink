@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 
 export default function GamificationLayout() {
   return (
-    <Stack>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" options={{ title: "XP & Progress" }} />
       <Stack.Screen name="badges" options={{ title: "Badges" }} />
       <Stack.Screen name="leaderboard" options={{ title: "Leaderboard" }} />

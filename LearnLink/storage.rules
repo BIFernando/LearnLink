@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isVerifiedNonAdminStudent() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.get('admin', false) != true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedNonAdminStudent()
+        && request.auth.uid == userId;
+    }
+
+    function isValidProfileImage() {
+      return request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp'
+        ];
+    }
+
+    match /profilePictures/{userId}/{fileName} {
+      allow read: if isVerifiedNonAdminStudent();
+      allow create, update: if isOwner(userId) && isValidProfileImage();
+      allow delete: if isOwner(userId);
+    }
+  }
+}

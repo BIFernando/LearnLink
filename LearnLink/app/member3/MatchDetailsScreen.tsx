@@ -19,9 +19,10 @@ import {
   ScoreBadge,
   SkillTag,
 } from '../../components/member3/matching-components';
-import { MatchingService } from '../../config/matching.service';
+import { MatchingService } from '../../services/member3/matchingService';
 import { auth } from '../../config/firebase';
-import type { IMatch, IUser } from '../../../src/types/matching.types';
+import type { IMatch, IUser } from '../../../src/types/matching.types'; // Keep this if your types are in the outer src folder
+import { ReportActionButton } from '../../components/reports/ReportActionButton';
 
 const matchingService = new MatchingService();
 
@@ -171,6 +172,12 @@ const MatchDetailsScreen: React.FC<{ route?: any; navigation?: any }> = ({
           >
             <Text style={styles.secondaryButtonText}>👤 View Full Profile</Text>
           </TouchableOpacity>
+
+          <ReportActionButton
+            targetType="USER"
+            targetId={match.matchedUserId}
+            label="Report this user"
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

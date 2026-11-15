@@ -7,17 +7,16 @@ import {
   query,
   where,
   orderBy,
-  updateDoc,
   serverTimestamp,
   or,
   runTransaction,
 } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 
 import { getCurrentUserId } from "./currentUser";
 
-import { db } from "../../config/firebase";
+import { db, functions } from "../../config/firebase";
 import { Session } from "../../types/member4/member4";
-import { CREDITS_PER_SESSION } from "./creditService";
 
 // Get sessions where the user is either the teacher or learner.
 export async function getUserSessions(
@@ -170,6 +169,32 @@ export async function confirmSessionCompletion(
 > {
   const sessionDocRef = doc(db, "sessions", sessionId);
   const currentUserId = getCurrentUserId();
+  const initialSessionSnapshot = await getDoc(sessionDocRef);
+
+  if (!initialSessionSnapshot.exists()) {
+    throw new Error("Session not found.");
+  }
+
+  const initialSession = initialSessionSnapshot.data() as Session;
+  const initialExchangeSnapshot = await getDoc(
+    doc(db, "exchangeRequests", initialSession.exchangeRequestId)
+  );
+  if (!initialExchangeSnapshot.exists()) {
+    throw new Error("The exchange request for this session was not found.");
+  }
+
+  if (initialExchangeSnapshot.get("exchangeType") === "CREDIT") {
+    const completeCreditSession = httpsCallable<
+      { sessionId: string },
+      {
+        result:
+          | "WAITING_FOR_OTHER"
+          | "COMPLETED_WITH_CREDITS";
+      }
+    >(functions, "completeCreditSession");
+    const response = await completeCreditSession({ sessionId });
+    return response.data.result;
+  }
 
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(sessionDocRef);
@@ -262,106 +287,17 @@ if (!["CONFIRMED", "IN_PROGRESS"].includes(data.status)) {
       );
     }
 
-    let result: "COMPLETED" | "COMPLETED_WITH_CREDITS" = "COMPLETED";
-    let creditsTransferred = false;
-
-    if (exchange.exchangeType === "CREDIT") {
-      const teacherRef = doc(db, "users", data.teacherId);
-      const learnerRef = doc(db, "users", data.learnerId);
-      const earnTransactionRef = doc(
-        db,
-        "creditTransactions",
-        `${sessionId}_EARN`
-      );
-      const spendTransactionRef = doc(
-        db,
-        "creditTransactions",
-        `${sessionId}_SPEND`
-      );
-
-      const teacherSnapshot = await transaction.get(teacherRef);
-      const learnerSnapshot = await transaction.get(learnerRef);
-      const earnTransactionSnapshot = await transaction.get(earnTransactionRef);
-      const spendTransactionSnapshot = await transaction.get(spendTransactionRef);
-
-      if (!teacherSnapshot.exists() || !learnerSnapshot.exists()) {
-        throw new Error("A participant user profile could not be found.");
-      }
-
-      if (
-        earnTransactionSnapshot.exists() ||
-        spendTransactionSnapshot.exists()
-      ) {
-        throw new Error(
-          "Credit transactions already exist for this session; no additional transfer was made."
-        );
-      }
-
-      const teacherCredits = teacherSnapshot.get("skillCredits");
-      const learnerCredits = learnerSnapshot.get("skillCredits");
-
-      if (
-        (teacherCredits !== undefined &&
-          (typeof teacherCredits !== "number" ||
-            !Number.isFinite(teacherCredits) ||
-            teacherCredits < 0)) ||
-        (learnerCredits !== undefined &&
-          (typeof learnerCredits !== "number" ||
-            !Number.isFinite(learnerCredits) ||
-            learnerCredits < 0))
-      ) {
-        throw new Error("A participant has an invalid skill-credit balance.");
-      }
-
-      const currentTeacherCredits =
-        typeof teacherCredits === "number" ? teacherCredits : 0;
-      const currentLearnerCredits =
-        typeof learnerCredits === "number" ? learnerCredits : 0;
-
-      if (currentLearnerCredits < CREDITS_PER_SESSION) {
-        throw new Error(
-          `The learner has insufficient credits. At least ${CREDITS_PER_SESSION} credits are required.`
-        );
-      }
-
-      transaction.update(learnerRef, {
-        skillCredits: currentLearnerCredits - CREDITS_PER_SESSION,
-        updatedAt: serverTimestamp(),
-      });
-      transaction.update(teacherRef, {
-        skillCredits: currentTeacherCredits + CREDITS_PER_SESSION,
-        updatedAt: serverTimestamp(),
-      });
-      transaction.set(earnTransactionRef, {
-        userId: data.teacherId,
-        amount: CREDITS_PER_SESSION,
-        type: "EARN",
-        referenceId: sessionId,
-        description: `Credits earned for completed session ${sessionId}.`,
-        createdAt: serverTimestamp(),
-      });
-      transaction.set(spendTransactionRef, {
-        userId: data.learnerId,
-        amount: CREDITS_PER_SESSION,
-        type: "SPEND",
-        referenceId: sessionId,
-        description: `Credits spent for completed session ${sessionId}.`,
-        createdAt: serverTimestamp(),
-      });
-
-      result = "COMPLETED_WITH_CREDITS";
-      creditsTransferred = true;
-    } else if (exchange.exchangeType !== "DIRECT") {
+    if (exchange.exchangeType !== "DIRECT") {
       throw new Error("The exchange request has an unsupported exchange type.");
     }
 
     transaction.update(sessionDocRef, {
       completedBy: [data.teacherId, data.learnerId],
       status: "COMPLETED",
-      creditsTransferred,
+      creditsTransferred: false,
       updatedAt: serverTimestamp(),
     });
 
-    return result;
+    return "COMPLETED";
   });
 }

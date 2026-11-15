@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { createSession } from "../../services/member4/sessionService";
 import { SessionType } from "../../types/member4/member4";
@@ -18,6 +18,13 @@ import { getCurrentUserId } from "@/services/member4/currentUser";
 import { getExchangeRequest } from "@/services/member4/exchangeService";
 
 export default function ScheduleSessionScreen() {
+  const {
+    exchangeRequestId: exchangeRequestIdParam,
+    skillId: skillIdParam,
+  } = useLocalSearchParams<{
+    exchangeRequestId?: string | string[];
+    skillId?: string | string[];
+  }>();
   const [exchangeRequestId, setExchangeRequestId] = useState("");
   const [skillId, setSkillId] = useState("");
   const [date, setDate] = useState("");
@@ -30,6 +37,23 @@ export default function ScheduleSessionScreen() {
   const [loading, setLoading] = useState(false);
 
   const currentUserId = getCurrentUserId();
+
+  useEffect(() => {
+    const requestId = Array.isArray(exchangeRequestIdParam)
+      ? exchangeRequestIdParam[0]
+      : exchangeRequestIdParam;
+    const selectedSkillId = Array.isArray(skillIdParam)
+      ? skillIdParam[0]
+      : skillIdParam;
+
+    if (requestId !== undefined) {
+      setExchangeRequestId(requestId);
+    }
+
+    if (selectedSkillId !== undefined) {
+      setSkillId(selectedSkillId);
+    }
+  }, [exchangeRequestIdParam, skillIdParam]);
 
   async function handleSchedule() {
     if (

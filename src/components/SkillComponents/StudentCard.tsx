@@ -218,6 +218,10 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
     },
+    locationContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
 });
 
 export default StudentCard;

@@ -11,13 +11,14 @@ import {
 } from "react-native";
 import { FirebaseError } from "firebase/app";
 import { sendEmailVerification } from "firebase/auth";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth } from "../../config/firebase";
 import { useAuth } from "../../providers/AuthProvider";
+import { signOutStudent } from "../../services/authService";
 
-type VerificationAction = "resend" | "check";
+type VerificationAction = "resend" | "check" | "signOut";
 
 interface VerificationFeedback {
   kind: "success" | "pending" | "error";
@@ -38,6 +39,12 @@ function getVerificationErrorMessage(
     }
   }
 
+  if (action === "signOut") {
+    return error instanceof Error && !(error instanceof FirebaseError)
+      ? error.message
+      : "You could not be signed out. Please try again.";
+  }
+
   if (error instanceof Error) {
     return error.message;
   }
@@ -48,6 +55,7 @@ function getVerificationErrorMessage(
 }
 
 export default function VerifyEmailScreen() {
+  const router = useRouter();
   const { email: emailParam } = useLocalSearchParams<{
     email?: string | string[];
   }>();
@@ -147,6 +155,29 @@ export default function VerifyEmailScreen() {
     }
   }
 
+  async function handleUseAnotherAccount() {
+    if (actionInProgress.current) {
+      return;
+    }
+
+    actionInProgress.current = true;
+    setActiveAction("signOut");
+    setFeedback(null);
+
+    try {
+      await signOutStudent();
+      router.replace("/(auth)/login");
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: getVerificationErrorMessage(error, "signOut"),
+      });
+    } finally {
+      actionInProgress.current = false;
+      setActiveAction(null);
+    }
+  }
+
   const isBusy = activeAction !== null;
   const hasSession = Boolean(auth.currentUser ?? user);
 
@@ -231,6 +262,22 @@ export default function VerifyEmailScreen() {
                 <Text style={styles.secondaryButtonText}>
                   I&apos;ve Verified My Email
                 </Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={isBusy}
+              onPress={handleUseAnotherAccount}
+              style={({ pressed }) => [
+                styles.accountButton,
+                (pressed || isBusy) && styles.buttonMuted,
+              ]}
+            >
+              {activeAction === "signOut" ? (
+                <ActivityIndicator color="#3159A5" />
+              ) : (
+                <Text style={styles.accountButtonText}>Use Another Account</Text>
               )}
             </Pressable>
           </View>
@@ -352,6 +399,22 @@ const styles = StyleSheet.create({
     color: "#3159A5",
     fontSize: 15,
     fontWeight: "700",
+  },
+  accountButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 50,
+    paddingHorizontal: 12,
+  },
+  accountButtonText: {
+    color: "#334155",
+    fontSize: 15,
+    fontWeight: "600",
   },
   buttonMuted: {
     opacity: 0.65,

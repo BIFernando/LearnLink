@@ -4,6 +4,7 @@ import {
   sendPasswordResetEmail,
   sendEmailVerification,
   signInWithEmailAndPassword,
+  signOut,
   type User,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -146,4 +147,8 @@ export async function sendStudentPasswordResetEmail(
 ): Promise<void> {
   const normalizedEmail = studentLoginSchema.shape.email.parse(email);
   await sendPasswordResetEmail(auth, normalizedEmail);
+}
+
+export async function signOutStudent(): Promise<void> {
+  await signOut(auth);
 }

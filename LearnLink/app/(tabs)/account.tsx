@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/providers/AuthProvider';
+import { signOutStudent } from '@/services/authService';
 import {
   disableStudentPublicProfileVisibility,
   enableStudentPublicProfileVisibility,
@@ -27,13 +28,18 @@ export default function AccountScreen() {
     isLoading: isAuthLoading,
     isEmailVerified,
   } = useAuth();
+  const logoutInProgress = useRef(false);
   const visibilityRequestInProgress = useRef(false);
   const visibilityLoadId = useRef(0);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [isDiscoverable, setIsDiscoverable] = useState<boolean | null>(null);
   const [isVisibilityLoading, setIsVisibilityLoading] = useState(true);
   const [isVisibilityUpdating, setIsVisibilityUpdating] = useState(false);
   const [visibilityError, setVisibilityError] = useState<string | null>(null);
-  const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
+  const [visibilityMessage, setVisibilityMessage] = useState<string | null>(
+    null,
+  );
   const canManageVisibility = Boolean(user && isEmailVerified);
   const displayName =
     typeof studentProfile?.displayName === 'string'
@@ -154,12 +160,30 @@ export default function AccountScreen() {
         'Failed to update public profile visibility:',
         visibilityUpdateError,
       );
-      setVisibilityError(
-        'Could not update visibility. Please try again.',
-      );
+      setVisibilityError('Could not update visibility. Please try again.');
     } finally {
       visibilityRequestInProgress.current = false;
       setIsVisibilityUpdating(false);
+    }
+  }
+
+  async function handleLogout() {
+    if (logoutInProgress.current) {
+      return;
+    }
+
+    logoutInProgress.current = true;
+    setIsSigningOut(true);
+    setLogoutError(null);
+
+    try {
+      await signOutStudent();
+      router.replace('/(auth)/login');
+    } catch (logoutError) {
+      console.error('Failed to sign out student:', logoutError);
+      setLogoutError('Could not sign out. Please try again.');
+      logoutInProgress.current = false;
+      setIsSigningOut(false);
     }
   }
 
@@ -297,6 +321,28 @@ export default function AccountScreen() {
           ) : null}
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isSigningOut }}
+          disabled={isSigningOut}
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            (pressed || isSigningOut) && styles.buttonMuted,
+          ]}
+        >
+          {isSigningOut ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <ThemedText style={styles.logoutText}>Log Out</ThemedText>
+          )}
+        </Pressable>
+
+        {logoutError ? (
+          <ThemedText accessibilityRole="alert" style={styles.error}>
+            {logoutError}
+          </ThemedText>
+        ) : null}
       </ScrollView>
     </ThemedView>
   );
@@ -412,6 +458,22 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: '#3159A5',
+    fontWeight: '700',
+  },
+  logoutButton: {
+    alignItems: 'center',
+    backgroundColor: '#B42318',
+    borderRadius: 10,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  buttonMuted: {
+    opacity: 0.7,
+  },
+  logoutText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '700',
   },
   success: {

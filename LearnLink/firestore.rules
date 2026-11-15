@@ -139,7 +139,7 @@ service cloud.firestore {
         )
         || (ownsUser(userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(protectedUserFields()));
+            .hasAny(protectedUserFields())
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
           ])

@@ -1,9 +1,13 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApps, initializeApp } from "firebase/app";
+// Firebase 12.18.0's shared types omit this React Native runtime export.
+// @ts-expect-error React Native export is missing from Firebase's shared declarations.
+import { getReactNativePersistence, initializeAuth } from "firebase/auth";
+
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 function requireFirebaseEnv(name: string, value: string | undefined): string {
   const normalizedValue = value?.trim();
@@ -48,9 +52,9 @@ export const app =
   getApps().find((existingApp) => existingApp.name === "[DEFAULT]") ??
   initializeApp(firebaseConfig);
 
-// --- FIXED AUTH HERE ---
+
 export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
+  persistence: getReactNativePersistence(AsyncStorage),
 });
 
 export const db = getFirestore(app);

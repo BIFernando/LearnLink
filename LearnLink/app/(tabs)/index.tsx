@@ -18,10 +18,22 @@ const MATCHES_ROUTE = "/matches" as Href;
 
 const FEATURES: HomeFeature[] = [
   {
+    title: "Discover skills",
+    description: "Browse student portfolios",
+    icon: "compass-outline",
+    href: "/explore",
+  },
+  {
     title: "Skill matches",
     description: "Find students to learn with",
     icon: "people-outline",
     href: MATCHES_ROUTE,
+  },
+  {
+    title: "My Skills",
+    description: "Manage your skill portfolio",
+    icon: "school-outline",
+    href: "/my-skills",
   },
   {
     title: "Exchange requests",

@@ -22,18 +22,20 @@ import { useAuth } from "@/providers/AuthProvider";
 
 const routes = {
   home: "/" as Href,
+  discover: "/explore" as Href,
   matches: "/matches" as Href,
+  messages: "/chat" as Href,
+  profile: "/my-skills" as Href,
   exchanges: "/member4/exchange-requests" as Href,
   sessions: "/member4/sessions" as Href,
   wallet: "/member4/credit-wallet" as Href,
   selectExchangeForSession: "/member4/select-exchange-for-session" as Href,
   notifications: "/notifications" as Href,
-  messages: "/chat" as Href,
   progress: "/gamification" as Href,
   leaderboard: "/gamification/leaderboard" as Href,
 };
 
-type Destination = "home" | "matches" | "exchanges" | "sessions" | "wallet";
+type Destination = "home" | "discover" | "matches" | "messages" | "profile";
 
 const bottomDestinations: {
   key: Destination;
@@ -42,10 +44,10 @@ const bottomDestinations: {
   href: Href;
 }[] = [
   { key: "home", label: "Home", icon: "home-outline", href: routes.home },
+  { key: "discover", label: "Discover", icon: "compass-outline", href: routes.discover },
   { key: "matches", label: "Matches", icon: "people-outline", href: routes.matches },
-  { key: "exchanges", label: "Exchanges", icon: "swap-horizontal-outline", href: routes.exchanges },
-  { key: "sessions", label: "Sessions", icon: "calendar-outline", href: routes.sessions },
-  { key: "wallet", label: "Wallet", icon: "wallet-outline", href: routes.wallet },
+  { key: "messages", label: "Chat", icon: "chatbubbles-outline", href: routes.messages },
+  { key: "profile", label: "Profile", icon: "person-outline", href: routes.profile },
 ];
 
 const drawerDestinations: {
@@ -54,7 +56,9 @@ const drawerDestinations: {
   href: Href;
 }[] = [
   { label: "Notifications", icon: "notifications-outline", href: routes.notifications },
-  { label: "Messages", icon: "chatbubbles-outline", href: routes.messages },
+  { label: "Exchanges", icon: "swap-horizontal-outline", href: routes.exchanges },
+  { label: "Sessions", icon: "calendar-outline", href: routes.sessions },
+  { label: "Credit wallet", icon: "wallet-outline", href: routes.wallet },
   { label: "XP & Progress", icon: "flash-outline", href: routes.progress },
   { label: "Leaderboard", icon: "podium-outline", href: routes.leaderboard },
 ];
@@ -65,32 +69,29 @@ function getActiveDestination(pathname: string): Destination | null {
   }
 
   if (
+    pathname === "/explore" ||
+    pathname === "/(tabs)/explore" ||
+    pathname.startsWith("/students/")
+  ) {
+    return "discover";
+  }
+
+  if (
     pathname === "/matches" ||
     pathname.startsWith("/member3/")
   ) {
     return "matches";
   }
 
-  if (
-    pathname.startsWith("/member4/exchange-requests") ||
-    pathname.startsWith("/member4/exchange-request-details") ||
-    pathname.startsWith("/member4/create-exchange-request") ||
-    pathname.startsWith("/member4/my-exchanges")
-  ) {
-    return "exchanges";
+  if (pathname === "/chat" || pathname.startsWith("/chat/")) {
+    return "messages";
   }
 
   if (
-    pathname.startsWith("/member4/sessions") ||
-    pathname.startsWith("/member4/session-details") ||
-    pathname.startsWith("/member4/schedule-session") ||
-    pathname.startsWith("/member4/attendance-")
+    pathname === "/my-skills" ||
+    pathname.startsWith("/skills/")
   ) {
-    return "sessions";
-  }
-
-  if (pathname.startsWith("/member4/credit-wallet")) {
-    return "wallet";
+    return "profile";
   }
 
   return null;
@@ -100,13 +101,16 @@ function isPrimaryRoute(pathname: string): boolean {
   return [
     "/",
     "/(tabs)",
+    "/explore",
+    "/(tabs)/explore",
+    "/my-skills",
     "/matches",
+    "/chat",
     "/member4/exchange-requests",
     "/member4/my-exchanges",
     "/member4/sessions",
     "/member4/credit-wallet",
     "/notifications",
-    "/chat",
     "/gamification",
     "/gamification/leaderboard",
   ].includes(pathname);

@@ -293,3 +293,28 @@ export const disablePublicProfileVisibility = onCall(
     }
   },
 );
+
+export const getPublicProfileVisibility = onCall(
+  async (request: CallableRequest<unknown>) => {
+    const uid = requireVerifiedStudent(request);
+    assertEmptyPayload(request.data);
+
+    try {
+      const publicProfileSnapshot = await publicProfilesCollection.doc(uid).get();
+      return {
+        userId: uid,
+        isDiscoverable: publicProfileSnapshot.exists,
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      logger.error("Reading public profile visibility failed.");
+      throw new HttpsError(
+        "internal",
+        "Could not load profile visibility. Please try again.",
+      );
+    }
+  },
+);

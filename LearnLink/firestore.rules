@@ -124,6 +124,25 @@ service cloud.firestore {
         && (isCategory || data.keys().hasAny(['categoryId']));
     }
 
+    function validSkillSuggestion(data) {
+      return data.keys().hasOnly([
+          'name', 'categoryId', 'description', 'submittedBy', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && isNonEmptyString(data.name)
+        && data.name.size() <= 100
+        && (!data.keys().hasAny(['categoryId'])
+          || data.categoryId == null
+          || data.categoryId is string)
+        && (!data.keys().hasAny(['description'])
+          || data.description == null
+          || (data.description is string && data.description.size() <= 500))
+        && isNonEmptyString(data.submittedBy)
+        && data.status == 'PENDING'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
     match /admin/{document=**} {
       allow read, write: if isAdmin();
     }
@@ -139,7 +158,7 @@ service cloud.firestore {
         )
         || (ownsUser(userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(protectedUserFields()));
+            .hasAny(protectedUserFields())
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'admin', 'isAdmin', 'role', 'isActive', 'suspended', 'suspendedAt'
           ])
@@ -211,6 +230,15 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time;
       allow delete: if isAdmin();
+    }
+
+    match /skillSuggestions/{suggestionId} {
+      allow create: if signedIn()
+        && request.resource.data.submittedBy == request.auth.uid
+        && validSkillSuggestion(request.resource.data);
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.submittedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     match /matches/{matchId} {

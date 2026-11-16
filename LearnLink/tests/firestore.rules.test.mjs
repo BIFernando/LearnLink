@@ -188,6 +188,7 @@ test("admins can manage users and catalog records using a custom claim", async (
 
 test("users may only write their own userSkills and exchanges require valid fields", async () => {
   const aliceDb = userDb("alice");
+  const bobDb = userDb("bob");
   await assertSucceeds(
     setDoc(doc(aliceDb, "userSkills", "alice-skill"), {
       userId: "alice",
@@ -200,6 +201,17 @@ test("users may only write their own userSkills and exchanges require valid fiel
       skillId: "skill-b",
     })
   );
+  await assertSucceeds(
+    updateDoc(doc(aliceDb, "userSkills", "alice-skill"), {
+      skillName: "Updated skill",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(aliceDb, "userSkills", "alice-skill"), { userId: "bob" })
+  );
+  await assertFails(deleteDoc(doc(bobDb, "userSkills", "alice-skill")));
+  await assertSucceeds(deleteDoc(doc(aliceDb, "userSkills", "alice-skill")));
 
   await assertSucceeds(
     setDoc(doc(aliceDb, "exchangeRequests", "exchange-1"), {
@@ -226,6 +238,52 @@ test("users may only write their own userSkills and exchanges require valid fiel
       message: "",
       status: "PENDING",
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("skill suggestions are private to their author and admin-managed", async () => {
+  const aliceDb = userDb("alice");
+  const bobDb = userDb("bob");
+  const adminDb = userDb("admin", { admin: true });
+
+  await assertSucceeds(
+    setDoc(doc(aliceDb, "skillSuggestions", "suggestion-alice"), {
+      name: "Motion graphics",
+      categoryId: null,
+      description: "Create animated visual content",
+      submittedBy: "alice",
+      status: "PENDING",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    setDoc(doc(aliceDb, "skillSuggestions", "suggestion-forged"), {
+      name: "Forged suggestion",
+      categoryId: null,
+      description: null,
+      submittedBy: "bob",
+      status: "PENDING",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    getDoc(doc(aliceDb, "skillSuggestions", "suggestion-alice"))
+  );
+  await assertFails(
+    getDoc(doc(bobDb, "skillSuggestions", "suggestion-alice"))
+  );
+  await assertFails(
+    updateDoc(doc(aliceDb, "skillSuggestions", "suggestion-alice"), {
+      status: "APPROVED",
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(adminDb, "skillSuggestions", "suggestion-alice"), {
+      status: "APPROVED",
       updatedAt: serverTimestamp(),
     })
   );

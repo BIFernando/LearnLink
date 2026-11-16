@@ -42,6 +42,11 @@ export function StudentRouteGuard({ children }: PropsWithChildren) {
   const [retryCount, setRetryCount] = useState(0);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+export function StudentRouteGuard({ children }: PropsWithChildren) {
+  const { isLoading, user, isEmailVerified } = useAuth();
+  const [adminClaimCheck, setAdminClaimCheck] =
+    useState<AdminClaimCheck | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (isLoading || !user) {
@@ -208,6 +213,9 @@ function StudentProfileRecoveryState({
       </Pressable>
     </View>
   );
+}
+
+  return children;
 }
 
 function LoadingState() {

@@ -47,7 +47,7 @@ const levelLabels: Record<StudentSkill["proficiencyLevel"], string> = {
   EXPERT: "Expert",
 };
 
-function MySkillsScreen() {
+export default function MySkillsScreen() {
   const router = useRouter();
   const { user, studentProfile, isLoading: isAuthLoading } = useAuth();
   const [skills, setSkills] = useState<StudentSkill[]>([]);

@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   onDocumentCreated,
   onDocumentWritten,
@@ -11,17 +11,20 @@ import {
 import {
   COLLECTIONS,
   REGION,
-  createNotification,
   createNotificationOnce,
   db,
   exchangeNotificationId,
   getDisplayName,
+  notificationDocId,
   truncate,
 } from "./shared";
 
 /**
- * New message → conversation preview + unread counts + one collapsed NEW_MESSAGE
- * notification per recipient and conversation.
+ * New message → conversation preview + unread counts + a NEW_MESSAGE notification per
+ * recipient. The app does the same on the Spark plan: if the conversation's
+ * lastMessageAt is already at or after this message, the app (or a newer message)
+ * updated it, so the preview/count update is skipped. The notification uses the
+ * app's id and is written create-once.
  */
 export const onMessageCreated = onDocumentCreated(
   { document: "conversations/{conversationId}/messages/{messageId}", region: REGION },
@@ -33,7 +36,7 @@ export const onMessageCreated = onDocumentCreated(
   ) => {
     const message = event.data?.data();
     if (!message) return;
-    const { conversationId } = event.params;
+    const { conversationId, messageId } = event.params;
     const senderId = typeof message.senderId === "string" ? message.senderId : "";
     const text = typeof message.text === "string" ? message.text : "";
 
@@ -44,27 +47,36 @@ export const onMessageCreated = onDocumentCreated(
     const participants = (conversation.get("participantIds") as string[] | undefined) ?? [];
     const recipients = participants.filter((id) => id !== senderId);
 
-    const update: Record<string, unknown> = {
-      lastMessage: truncate(text, 200),
-      lastMessageAt: message.createdAt ?? FieldValue.serverTimestamp(),
-    };
-    recipients.forEach((id) => {
-      update[`unreadCounts.${id}`] = FieldValue.increment(1);
-    });
-    await conversationRef.update(update);
+    const createdAt = message.createdAt instanceof Timestamp ? message.createdAt : null;
+    const lastMessageAt = conversation.get("lastMessageAt");
+    const alreadyUpdated =
+      createdAt !== null &&
+      lastMessageAt instanceof Timestamp &&
+      lastMessageAt.toMillis() >= createdAt.toMillis();
+
+    if (!alreadyUpdated) {
+      const update: Record<string, unknown> = {
+        lastMessage: truncate(text, 200),
+        lastMessageAt: createdAt ?? FieldValue.serverTimestamp(),
+      };
+      recipients.forEach((id) => {
+        update[`unreadCounts.${id}`] = FieldValue.increment(1);
+      });
+      await conversationRef.update(update);
+    }
 
     const senderName = await getDisplayName(senderId);
     await Promise.all(
       recipients.map((recipientId) =>
-        createNotification(
+        createNotificationOnce(
           {
             userId: recipientId,
             type: "NEW_MESSAGE",
-            title: senderName,
+            title: truncate(senderName, 100),
             body: truncate(text, 140),
             referenceId: conversationId,
           },
-          `msg_${conversationId}_${recipientId}`,
+          notificationDocId("NEW_MESSAGE", `${conversationId}_${messageId}`, recipientId),
         ),
       ),
     );

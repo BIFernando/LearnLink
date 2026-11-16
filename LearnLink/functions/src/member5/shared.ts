@@ -40,6 +40,9 @@ export type NotificationType =
   | "REQUEST_ACCEPTED"
   | "REQUEST_REJECTED"
   | "NEW_MESSAGE"
+  | "SESSION_SCHEDULED"
+  | "SESSION_CONFIRMED"
+  | "SESSION_CANCELLED"
   | "SESSION_REMINDER"
   | "SESSION_COMPLETED"
   | "NEW_REVIEW"
@@ -97,16 +100,22 @@ export async function createNotification(input: NotificationInput, id?: string):
 }
 
 /**
- * Deterministic id for exchange notifications. The app writes the same id
- * (services/member5/notificationService.ts → exchangeNotificationId) so the client
- * and this function never create duplicates.
+ * Deterministic notification id `${type}_${key}_${userId}`. The app writes the same id
+ * (services/member5/notificationService.ts → notificationDocId) on the Spark plan, so
+ * the client and the functions never create duplicates. Use createNotificationOnce.
+ * Keys: exchange → requestId; NEW_MESSAGE → `${conversationId}_${messageId}`;
+ * NEW_REVIEW → reviewId; SESSION_* → sessionId.
  */
+export function notificationDocId(type: NotificationType, key: string, userId: string): string {
+  return `${type}_${key}_${userId}`;
+}
+
 export function exchangeNotificationId(
   type: "EXCHANGE_REQUEST" | "REQUEST_ACCEPTED" | "REQUEST_REJECTED",
   requestId: string,
   userId: string,
 ): string {
-  return `${type}_${requestId}_${userId}`;
+  return notificationDocId(type, requestId, userId);
 }
 
 /** Creates a notification only if `id` doesn't exist yet. Returns false if it did. */

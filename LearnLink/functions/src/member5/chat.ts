@@ -1,5 +1,12 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import {
+  onDocumentCreated,
+  onDocumentWritten,
+  type Change,
+  type DocumentSnapshot,
+  type FirestoreEvent,
+  type QueryDocumentSnapshot,
+} from "firebase-functions/v2/firestore";
 
 import { COLLECTIONS, REGION, createNotification, db, getDisplayName, truncate } from "./shared";
 
@@ -9,7 +16,12 @@ import { COLLECTIONS, REGION, createNotification, db, getDisplayName, truncate }
  */
 export const onMessageCreated = onDocumentCreated(
   { document: "conversations/{conversationId}/messages/{messageId}", region: REGION },
-  async (event) => {
+  async (
+    event: FirestoreEvent<
+      QueryDocumentSnapshot | undefined,
+      { conversationId: string; messageId: string }
+    >,
+  ) => {
     const message = event.data?.data();
     if (!message) return;
     const { conversationId } = event.params;
@@ -58,7 +70,12 @@ export const onMessageCreated = onDocumentCreated(
  */
 export const onExchangeRequestWritten = onDocumentWritten(
   { document: "exchangeRequests/{requestId}", region: REGION },
-  async (event) => {
+  async (
+    event: FirestoreEvent<
+      Change<DocumentSnapshot> | undefined,
+      { requestId: string }
+    >,
+  ) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;

@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import { notifyNewReview } from "@/services/member5/notificationService";
 import type { Session } from "@/types/member4/member4";
 import {
   MEMBER5_COLLECTIONS,
@@ -67,8 +68,9 @@ export function validateReview(input: NewReviewInput): string | null {
 
 /**
  * Creates reviews/{sessionId}_{reviewerId}. Rules reject a second review for the same
- * session (it would be an update). Rating stats, XP and the NEW_REVIEW notification are
- * handled by the onReviewCreated Cloud Function.
+ * session (it would be an update). Rating stats and XP are handled by the onReviewCreated
+ * Cloud Function; the NEW_REVIEW notification is created here and by the function
+ * (same id, create-once).
  */
 export async function submitReview(input: NewReviewInput, reviewerId: string): Promise<void> {
   const problem = validateReview(input);
@@ -78,7 +80,8 @@ export async function submitReview(input: NewReviewInput, reviewerId: string): P
     throw new ReviewNotAllowedError("You have already reviewed this session.");
   }
 
-  await setDoc(doc(db, MEMBER5_COLLECTIONS.reviews, reviewIdFor(input.sessionId, reviewerId)), {
+  const reviewId = reviewIdFor(input.sessionId, reviewerId);
+  await setDoc(doc(db, MEMBER5_COLLECTIONS.reviews, reviewId), {
     sessionId: input.sessionId,
     reviewerId,
     revieweeId: input.revieweeId,
@@ -87,6 +90,9 @@ export async function submitReview(input: NewReviewInput, reviewerId: string): P
     tags: input.tags,
     createdAt: serverTimestamp(),
   });
+
+  // Spark plan: the function isn't deployed, so the app tells the reviewee. Never throws.
+  await notifyNewReview({ reviewId, reviewerId, revieweeId: input.revieweeId, rating: input.rating });
 }
 
 export async function getReviewsForUser(userId: string): Promise<Review[]> {

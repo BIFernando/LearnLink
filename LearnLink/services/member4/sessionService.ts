@@ -14,6 +14,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 
 import { getCurrentUserId } from "./currentUser";
+import { notifySessionEvent } from "../member5/notificationService";
 
 import { db, functions } from "../../config/firebase";
 import { Session } from "../../types/member4/member4";
@@ -69,6 +70,9 @@ export async function createSession(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  // Tell the other participant (never throws).
+  await notifySessionEvent(docRef.id, "PROPOSED");
 
   return docRef.id;
 }
@@ -159,6 +163,9 @@ export async function updateSessionStatus(
       updatedAt: serverTimestamp(),
     });
   });
+
+  // Tell the other participant about CONFIRMED / CANCELLED (never throws).
+  await notifySessionEvent(sessionId, newStatus);
 }
 
 
@@ -193,10 +200,15 @@ export async function confirmSessionCompletion(
       }
     >(functions, "completeCreditSession");
     const response = await completeCreditSession({ sessionId });
+    if (response.data.result !== "WAITING_FOR_OTHER") {
+      await notifySessionEvent(sessionId, "COMPLETED");
+    }
     return response.data.result;
   }
 
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction<
+    "WAITING_FOR_OTHER" | "COMPLETED" | "COMPLETED_WITH_CREDITS"
+  >(db, async (transaction) => {
     const snapshot = await transaction.get(sessionDocRef);
 
     if (!snapshot.exists()) {
@@ -300,4 +312,10 @@ if (!["CONFIRMED", "IN_PROGRESS"].includes(data.status)) {
 
     return "COMPLETED";
   });
+
+  // Tell the other participant the session is complete (never throws).
+  if (result !== "WAITING_FOR_OTHER") {
+    await notifySessionEvent(sessionId, "COMPLETED");
+  }
+  return result;
 }

@@ -8,7 +8,16 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase-functions/v2/firestore";
 
-import { COLLECTIONS, REGION, createNotification, db, getDisplayName, truncate } from "./shared";
+import {
+  COLLECTIONS,
+  REGION,
+  createNotification,
+  createNotificationOnce,
+  db,
+  exchangeNotificationId,
+  getDisplayName,
+  truncate,
+} from "./shared";
 
 /**
  * New message → conversation preview + unread counts + one collapsed NEW_MESSAGE
@@ -67,6 +76,8 @@ export const onMessageCreated = onDocumentCreated(
  * created → EXCHANGE_REQUEST to the receiver;
  * ACCEPTED → REQUEST_ACCEPTED to the sender + the conversation is created;
  * REJECTED → REQUEST_REJECTED to the sender.
+ * Notification ids are deterministic and written create-once: the app may already
+ * have created the same doc (Spark-plan fallback), and a read one must stay read.
  */
 export const onExchangeRequestWritten = onDocumentWritten(
   { document: "exchangeRequests/{requestId}", region: REGION },
@@ -85,13 +96,16 @@ export const onExchangeRequestWritten = onDocumentWritten(
 
     if (!before && after.status === "PENDING") {
       const senderName = await getDisplayName(senderId);
-      await createNotification({
-        userId: receiverId,
-        type: "EXCHANGE_REQUEST",
-        title: "New Swap Offer",
-        body: `${senderName} proposed a skill exchange with you.`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: receiverId,
+          type: "EXCHANGE_REQUEST",
+          title: "New Swap Offer",
+          body: `${senderName} proposed a skill exchange with you.`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("EXCHANGE_REQUEST", requestId, receiverId),
+      );
       return;
     }
 
@@ -111,22 +125,28 @@ export const onExchangeRequestWritten = onDocumentWritten(
         .catch(() => undefined); // already created from the app
 
       const receiverName = await getDisplayName(receiverId);
-      await createNotification({
-        userId: senderId,
-        type: "REQUEST_ACCEPTED",
-        title: "Swap Accepted",
-        body: `${receiverName} accepted your exchange request. Say hi in chat!`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: senderId,
+          type: "REQUEST_ACCEPTED",
+          title: "Swap Accepted",
+          body: `${receiverName} accepted your exchange request. Say hi in chat!`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("REQUEST_ACCEPTED", requestId, senderId),
+      );
     } else if (after.status === "REJECTED") {
       const receiverName = await getDisplayName(receiverId);
-      await createNotification({
-        userId: senderId,
-        type: "REQUEST_REJECTED",
-        title: "Swap Declined",
-        body: `${receiverName} declined your exchange request.`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: senderId,
+          type: "REQUEST_REJECTED",
+          title: "Swap Declined",
+          body: `${receiverName} declined your exchange request.`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("REQUEST_REJECTED", requestId, senderId),
+      );
     }
   },
 );

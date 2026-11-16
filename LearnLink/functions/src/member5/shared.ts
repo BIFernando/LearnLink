@@ -96,6 +96,19 @@ export async function createNotification(input: NotificationInput, id?: string):
   await ref.set(notificationData(input));
 }
 
+/**
+ * Deterministic id for exchange notifications. The app writes the same id
+ * (services/member5/notificationService.ts → exchangeNotificationId) so the client
+ * and this function never create duplicates.
+ */
+export function exchangeNotificationId(
+  type: "EXCHANGE_REQUEST" | "REQUEST_ACCEPTED" | "REQUEST_REJECTED",
+  requestId: string,
+  userId: string,
+): string {
+  return `${type}_${requestId}_${userId}`;
+}
+
 /** Creates a notification only if `id` doesn't exist yet. Returns false if it did. */
 export async function createNotificationOnce(input: NotificationInput, id: string): Promise<boolean> {
   try {

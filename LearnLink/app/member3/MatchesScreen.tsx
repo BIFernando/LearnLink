@@ -108,7 +108,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
 };
 
 const MatchesScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
-  const currentUserId = auth.currentUser?.uid ?? 'demo-user-1';
+  const currentUserId = auth.currentUser?.uid;
   const { matches, loading, error, refresh } = useMatches(currentUserId);
   const [refreshing, setRefreshing] = useState(false);
 

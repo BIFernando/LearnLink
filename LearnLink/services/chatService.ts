@@ -125,20 +125,21 @@ export const sendMessage = async (
   image?: { uri: string; mimeType?: string },
 ) => {
   try {
-    const trimmedText = text.trim();
+    const trimmedText = (text || '').trim();
     if (!trimmedText && !image) {
       throw new Error('Add a message or photo before sending.');
     }
 
-    const imageBase64 = image ? await compressChatImage(image.uri) : undefined;
-
-    await addDoc(collection(db, messagesPath(conversationId)), {
+    const messageData = {
       senderId,
-      text: trimmedText,
-      ...(imageBase64 ? { imageBase64 } : {}),
+      text: trimmedText || '',
+      ...(image ? { imageBase64: await compressChatImage(image.uri) } : {}),
       createdAt: serverTimestamp(),
       isRead: false,
-    });
+    };
+
+    console.log('Firestore chat message payload:', messageData);
+    await addDoc(collection(db, messagesPath(conversationId)), messageData);
   } catch (error) {
     console.error('Error sending message:', error);
     throw error;

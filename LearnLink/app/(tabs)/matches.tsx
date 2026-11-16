@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -7,14 +8,15 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth } from "../../config/firebase";
 import MatchCard from "../../components/member3/MatchCard";
+import { auth } from "../../config/firebase";
 import { MatchingService } from "../../services/member3/matchingService";
 
 export default function MatchesScreen() {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const userId = auth.currentUser?.uid;
+  const router = useRouter();
 
   useEffect(() => {
     let isActive = true;
@@ -61,14 +63,20 @@ export default function MatchesScreen() {
         renderItem={({ item }) => (
           <MatchCard
             match={item}
-            onPress={() => console.log("Go to details")}
+            onPress={() => {
+              router.push({
+                pathname: "/member3/MatchDetailsScreen",
+                params: {
+                  matchId: item.matchId,
+                  matchedUserId: item.matchedUserId,
+                },
+              });
+            }}
           />
         )}
         ListEmptyComponent={
           <Text style={styles.centerText}>
-            {userId
-              ? "No matches found. Add users and skills in Firebase to generate matches!"
-              : "Sign in to see your matches."}
+            {userId ? "No matches found." : "Sign in to see your matches."}
           </Text>
         }
       />

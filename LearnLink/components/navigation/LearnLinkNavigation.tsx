@@ -18,10 +18,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { CountBadge } from "@/components/member5/CountBadge";
 import { Avatar, type IoniconName } from "@/components/member5/ui";
 import { m5Colors } from "@/constants/member5Theme";
 import { useAuth } from "@/providers/AuthProvider";
 import { signOutStudent } from "@/services/authService";
+import { useUnreadChatCount } from "@/services/chatService";
+import { useUnreadNotificationCount } from "@/services/member5/notificationService";
 
 const routes = {
   home: "/" as Href,
@@ -127,6 +130,8 @@ export function LearnLinkNavigation() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const unreadNotifications = useUnreadNotificationCount(user?.uid);
+  const unreadChats = useUnreadChatCount(user?.uid);
   const isAuthRoute = segments[0] === "(auth)";
   const showChrome =
     !isAuthRoute && !pathname.startsWith("/admin") && pathname !== "/modal";
@@ -226,6 +231,7 @@ export function LearnLinkNavigation() {
                     size={21}
                     color={m5Colors.textPrimary}
                   />
+                  <CountBadge count={unreadNotifications} />
                 </Pressable>
                 <Pressable
                   accessibilityLabel="Messages"
@@ -239,6 +245,7 @@ export function LearnLinkNavigation() {
                     size={21}
                     color={m5Colors.textPrimary}
                   />
+                  <CountBadge count={unreadChats} />
                 </Pressable>
               </View>
             ),
@@ -307,6 +314,9 @@ export function LearnLinkNavigation() {
                       isActive ? m5Colors.primary : m5Colors.textMuted
                     }
                   />
+                  {destination.key === "messages" ? (
+                    <CountBadge count={unreadChats} style={styles.tabBadge} />
+                  ) : null}
                   <Text
                     style={[
                       styles.bottomLabel,
@@ -496,6 +506,12 @@ const styles = StyleSheet.create({
     gap: 3,
     justifyContent: "center",
     minHeight: 54,
+  },
+  tabBadge: {
+    left: "50%",
+    marginLeft: 4,
+    right: undefined,
+    top: 2,
   },
   bottomLabel: {
     color: m5Colors.textMuted,

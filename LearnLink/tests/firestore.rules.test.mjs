@@ -68,6 +68,7 @@ function sessionData(overrides = {}) {
     exchangeRequestId: "exchange-1",
     teacherId: "alice",
     learnerId: "bob",
+    proposedBy: "alice",
     skillId: "skill-a",
     scheduledAt: new Date("2030-01-01T10:00:00Z"),
     duration: 60,
@@ -305,14 +306,339 @@ test("participants can propose sessions for accepted exchanges", async () => {
       updatedAt: serverTimestamp(),
     })
   );
+  await assertSucceeds(
+    setDoc(doc(userDb("bob"), "sessions", "session-2"), {
+      ...sessionData({ proposedBy: "bob" }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
   await assertFails(
-    setDoc(doc(userDb("mallory"), "sessions", "session-2"), {
+    setDoc(doc(aliceDb, "sessions", "session-wrong-proposer"), {
+      ...sessionData({ proposedBy: "bob" }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  const sessionWithoutProposer = sessionData();
+  delete sessionWithoutProposer.proposedBy;
+  await assertFails(
+    setDoc(doc(aliceDb, "sessions", "session-missing-proposer"), {
+      ...sessionWithoutProposer,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  await assertFails(
+    setDoc(doc(userDb("mallory"), "sessions", "session-mallory"), {
       ...sessionData(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
   );
   await assertFails(getDoc(doc(userDb("mallory"), "sessions", "session-1")));
+});
+
+test("only the recipient can accept a valid proposal", async () => {
+  await seedDocuments([
+    { path: "sessions/session-recipient-accept", data: sessionData() },
+    { path: "sessions/session-proposer-accept", data: sessionData() },
+    { path: "sessions/session-outsider-accept", data: sessionData() },
+  ]);
+
+  await assertSucceeds(
+    updateDoc(doc(userDb("bob"), "sessions", "session-recipient-accept"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-recipient-accept"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("alice"), "sessions", "session-proposer-accept"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("mallory"), "sessions", "session-outsider-accept"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("proposal rejection and withdrawal enforce distinct participant roles", async () => {
+  await seedDocuments([
+    { path: "sessions/session-reject", data: sessionData() },
+    { path: "sessions/session-proposer-reject", data: sessionData() },
+    { path: "sessions/session-withdraw", data: sessionData() },
+    { path: "sessions/session-recipient-withdraw", data: sessionData() },
+    { path: "sessions/session-outsider-reject", data: sessionData() },
+    { path: "sessions/session-outsider-withdraw", data: sessionData() },
+  ]);
+
+  await assertSucceeds(
+    updateDoc(doc(userDb("bob"), "sessions", "session-reject"), {
+      status: "CANCELLED",
+      proposalResolution: "REJECTED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-reject"), {
+      status: "CANCELLED",
+      proposalResolution: "REJECTED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("alice"), "sessions", "session-proposer-reject"), {
+      status: "CANCELLED",
+      proposalResolution: "REJECTED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("mallory"), "sessions", "session-outsider-reject"), {
+      status: "CANCELLED",
+      proposalResolution: "REJECTED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(userDb("alice"), "sessions", "session-withdraw"), {
+      status: "CANCELLED",
+      proposalResolution: "WITHDRAWN",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("alice"), "sessions", "session-withdraw"), {
+      status: "CANCELLED",
+      proposalResolution: "WITHDRAWN",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(
+      doc(userDb("bob"), "sessions", "session-recipient-withdraw"),
+      {
+        status: "CANCELLED",
+        proposalResolution: "WITHDRAWN",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+  await assertFails(
+    updateDoc(doc(userDb("mallory"), "sessions", "session-outsider-withdraw"), {
+      status: "CANCELLED",
+      proposalResolution: "WITHDRAWN",
+      updatedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("only the recipient can suggest another future time on the same proposal", async () => {
+  await seedDocuments([
+    { path: "sessions/session-reschedule", data: sessionData() },
+    { path: "sessions/session-proposer-reschedule", data: sessionData() },
+    { path: "sessions/session-unrelated-change", data: sessionData() },
+    { path: "sessions/session-past-reschedule", data: sessionData() },
+    { path: "sessions/session-outsider-reschedule", data: sessionData() },
+    { path: "sessions/session-equal-time-reschedule", data: sessionData() },
+    { path: "sessions/session-string-time-reschedule", data: sessionData() },
+  ]);
+
+  await assertSucceeds(
+    updateDoc(doc(userDb("bob"), "sessions", "session-reschedule"), {
+      scheduledAt: new Date("2035-01-01T10:00:00Z"),
+      proposedBy: "bob",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  const rescheduled = await getDoc(
+    doc(userDb("bob"), "sessions", "session-reschedule")
+  );
+  assert.equal(rescheduled.get("status"), "PROPOSED");
+  assert.equal(rescheduled.get("proposedBy"), "bob");
+  assert.equal(rescheduled.id, "session-reschedule");
+  assert.equal(
+    rescheduled.get("scheduledAt").toDate().toISOString(),
+    "2035-01-01T10:00:00.000Z"
+  );
+  assert.equal(rescheduled.get("exchangeRequestId"), "exchange-1");
+  assert.equal(rescheduled.get("teacherId"), "alice");
+  assert.equal(rescheduled.get("learnerId"), "bob");
+  assert.equal(rescheduled.get("skillId"), "skill-a");
+  assert.equal(rescheduled.get("duration"), 60);
+  assert.equal(rescheduled.get("sessionType"), "ONLINE");
+  assert.equal(
+    rescheduled.get("meetingLink"),
+    "https://example.test/meeting"
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-reschedule"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(userDb("alice"), "sessions", "session-reschedule"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  await assertFails(
+    updateDoc(
+      doc(userDb("alice"), "sessions", "session-proposer-reschedule"),
+      {
+        scheduledAt: new Date("2035-01-01T10:00:00Z"),
+        proposedBy: "alice",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+  await assertFails(
+    updateDoc(
+      doc(userDb("bob"), "sessions", "session-unrelated-change"),
+      {
+        scheduledAt: new Date("2035-01-01T10:00:00Z"),
+        proposedBy: "bob",
+        skillId: "skill-forged",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+  await assertFails(
+    updateDoc(
+      doc(userDb("mallory"), "sessions", "session-outsider-reschedule"),
+      {
+        scheduledAt: new Date("2035-01-01T10:00:00Z"),
+        proposedBy: "mallory",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-past-reschedule"), {
+      scheduledAt: new Date("2020-01-01T10:00:00Z"),
+      proposedBy: "bob",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(
+      doc(userDb("bob"), "sessions", "session-equal-time-reschedule"),
+      {
+        scheduledAt: serverTimestamp(),
+        proposedBy: "bob",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+  await assertFails(
+    updateDoc(
+      doc(userDb("bob"), "sessions", "session-string-time-reschedule"),
+      {
+        scheduledAt: "2035-01-01T10:00:00Z",
+        proposedBy: "bob",
+        updatedAt: serverTimestamp(),
+      }
+    )
+  );
+});
+
+test("legacy proposals without a valid proposer cannot be responded to", async () => {
+  const legacySession = sessionData();
+  delete legacySession.proposedBy;
+  const malformedProposers = [
+    { id: "session-null-proposer", value: null },
+    { id: "session-empty-proposer", value: "" },
+    { id: "session-whitespace-proposer", value: "   " },
+    { id: "session-numeric-proposer", value: 42 },
+  ];
+  await seedDocuments([
+    { path: "sessions/session-legacy", data: legacySession },
+    {
+      path: "sessions/session-invalid-proposer",
+      data: sessionData({ proposedBy: "mallory" }),
+    },
+    ...malformedProposers.map(({ id, value }) => ({
+      path: `sessions/${id}`,
+      data: sessionData({ proposedBy: value }),
+    })),
+  ]);
+
+  await assertSucceeds(getDoc(doc(userDb("bob"), "sessions", "session-legacy")));
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-legacy"), {
+      status: "CONFIRMED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("alice"), "sessions", "session-legacy"), {
+      status: "CANCELLED",
+      proposalResolution: "WITHDRAWN",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-legacy"), {
+      status: "CANCELLED",
+      proposalResolution: "REJECTED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(userDb("bob"), "sessions", "session-invalid-proposer"), {
+      scheduledAt: new Date("2035-01-01T10:00:00Z"),
+      proposedBy: "bob",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  for (const { id } of malformedProposers) {
+    await assertFails(
+      updateDoc(doc(userDb("bob"), "sessions", id), {
+        status: "CONFIRMED",
+        updatedAt: serverTimestamp(),
+      })
+    );
+  }
+});
+
+test("confirmed-session cancellation remains available to both participants", async () => {
+  await seedDocuments([
+    {
+      path: "sessions/session-alice-cancel",
+      data: sessionData({ status: "CONFIRMED" }),
+    },
+    {
+      path: "sessions/session-bob-cancel",
+      data: sessionData({ status: "CONFIRMED" }),
+    },
+  ]);
+
+  await assertSucceeds(
+    updateDoc(doc(userDb("alice"), "sessions", "session-alice-cancel"), {
+      status: "CANCELLED",
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(userDb("bob"), "sessions", "session-bob-cancel"), {
+      status: "CANCELLED",
+      updatedAt: serverTimestamp(),
+    })
+  );
 });
 
 test("Member 4 exchange acceptance and direct session completion remain allowed", async () => {

@@ -82,12 +82,14 @@ service cloud.firestore {
     function validSession(data) {
       return data.keys().hasOnly([
           'exchangeRequestId', 'teacherId', 'learnerId', 'skillId',
-          'scheduledAt', 'duration', 'sessionType', 'location', 'meetingLink',
-          'status', 'completedBy', 'createdAt', 'updatedAt'
+          'proposedBy', 'scheduledAt', 'duration', 'sessionType', 'location',
+          'meetingLink', 'status', 'completedBy', 'createdAt', 'updatedAt'
         ])
         && isNonEmptyString(data.exchangeRequestId)
         && isNonEmptyString(data.teacherId)
         && isNonEmptyString(data.learnerId)
+        && isNonEmptyString(data.proposedBy)
+        && data.proposedBy == request.auth.uid
         && data.teacherId != data.learnerId
         && isNonEmptyString(data.skillId)
         && data.scheduledAt is timestamp
@@ -110,6 +112,12 @@ service cloud.firestore {
         && data.completedBy.size() == 0
         && data.createdAt == request.time
         && data.updatedAt == request.time;
+    }
+
+    function hasValidSessionProposer(data) {
+      return data.keys().hasAny(['proposedBy'])
+        && isNonEmptyString(data.proposedBy)
+        && data.proposedBy in [data.teacherId, data.learnerId];
     }
 
     function validCatalogRecord(data, isCategory) {
@@ -291,7 +299,8 @@ service cloud.firestore {
         || (isSessionParticipant(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly([
-              'status', 'updatedAt', 'completedBy', 'creditsTransferred'
+              'status', 'updatedAt', 'completedBy', 'creditsTransferred',
+              'scheduledAt', 'proposedBy', 'proposalResolution'
             ])
           && request.resource.data.updatedAt == request.time
           && (
@@ -299,13 +308,46 @@ service cloud.firestore {
                 .hasOnly(['status', 'updatedAt'])
               && (
                 (resource.data.status == 'PROPOSED'
-                  && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
+                  && request.resource.data.status == 'CONFIRMED'
+                  && hasValidSessionProposer(resource.data)
+                  && resource.data.proposedBy != request.auth.uid)
                 || (resource.data.status == 'CONFIRMED'
                   && request.resource.data.status
                     in ['IN_PROGRESS', 'CANCELLED', 'DISPUTED'])
                 || (resource.data.status == 'IN_PROGRESS'
                   && request.resource.data.status in ['CANCELLED', 'DISPUTED'])
               ))
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'updatedAt', 'proposalResolution'])
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasAll(['status', 'updatedAt', 'proposalResolution'])
+              && !resource.data.keys().hasAny(['proposalResolution'])
+              && resource.data.status == 'PROPOSED'
+              && request.resource.data.status == 'CANCELLED'
+              && hasValidSessionProposer(resource.data)
+              && resource.data.proposedBy != request.auth.uid
+              && request.resource.data.proposalResolution == 'REJECTED')
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'updatedAt', 'proposalResolution'])
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasAll(['status', 'updatedAt', 'proposalResolution'])
+              && !resource.data.keys().hasAny(['proposalResolution'])
+              && resource.data.status == 'PROPOSED'
+              && request.resource.data.status == 'CANCELLED'
+              && hasValidSessionProposer(resource.data)
+              && resource.data.proposedBy == request.auth.uid
+              && request.resource.data.proposalResolution == 'WITHDRAWN')
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['scheduledAt', 'proposedBy', 'updatedAt'])
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasAll(['scheduledAt', 'proposedBy', 'updatedAt'])
+              && resource.data.status == 'PROPOSED'
+              && request.resource.data.status == 'PROPOSED'
+              && hasValidSessionProposer(resource.data)
+              && resource.data.proposedBy != request.auth.uid
+              && request.resource.data.proposedBy == request.auth.uid
+              && request.resource.data.scheduledAt is timestamp
+              && request.resource.data.scheduledAt > request.time)
             || (request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['completedBy', 'updatedAt'])
               && resource.data.status in ['CONFIRMED', 'IN_PROGRESS']

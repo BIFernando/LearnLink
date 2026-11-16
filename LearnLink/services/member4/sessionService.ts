@@ -43,7 +43,10 @@ const sessionRef = collection(db, "sessions");
 
 // Create a session and prevent identical duplicate sessions.
 export async function createSession(
-  session: Omit<Session, "id" | "createdAt" | "updatedAt">
+  session: Omit<
+    Session,
+    "id" | "createdAt" | "updatedAt" | "proposalResolution"
+  >
 ) {
   // Check for an existing session with the same details.
   const duplicateQuery = query(
@@ -113,7 +116,7 @@ const allowedSessionTransitions: Record<
   Session["status"],
   Session["status"][]
 > = {
-  PROPOSED: ["CONFIRMED", "CANCELLED"],
+  PROPOSED: [],
   CONFIRMED: ["IN_PROGRESS", "CANCELLED", "DISPUTED"],
   IN_PROGRESS: ["CANCELLED", "DISPUTED"],
   COMPLETED: [],
@@ -159,6 +162,116 @@ export async function updateSessionStatus(
       updatedAt: serverTimestamp(),
     });
   });
+}
+
+type ProposalAction = "ACCEPT" | "REJECT" | "WITHDRAW" | "RESCHEDULE";
+
+async function updateSessionProposal(
+  sessionId: string,
+  action: ProposalAction,
+  scheduledAt?: Date
+): Promise<void> {
+  const sessionDocRef = doc(db, "sessions", sessionId);
+  const currentUserId = getCurrentUserId();
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(sessionDocRef);
+
+    if (!snapshot.exists()) {
+      throw new Error("Session not found.");
+    }
+
+    const sessionData = snapshot.data() as Session;
+    const isParticipant =
+      currentUserId === sessionData.teacherId ||
+      currentUserId === sessionData.learnerId;
+
+    if (!isParticipant) {
+      throw new Error("You are not authorized to modify this session.");
+    }
+
+    if (sessionData.status !== "PROPOSED") {
+      throw new Error("This proposal is no longer available to respond to.");
+    }
+
+    const proposedBy = sessionData.proposedBy;
+    const hasValidProposer =
+      typeof proposedBy === "string" &&
+      proposedBy.length > 0 &&
+      proposedBy.trim() === proposedBy &&
+      (proposedBy === sessionData.teacherId ||
+        proposedBy === sessionData.learnerId);
+
+    if (!hasValidProposer) {
+      throw new Error("This proposal's proposer is unknown.");
+    }
+
+    const isProposer = proposedBy === currentUserId;
+    if (action === "WITHDRAW" ? !isProposer : isProposer) {
+      throw new Error(
+        action === "WITHDRAW"
+          ? "Only the original proposer can withdraw this proposal."
+          : "Only the other participant can respond to this proposal."
+      );
+    }
+
+    if (action === "ACCEPT") {
+      transaction.update(sessionDocRef, {
+        status: "CONFIRMED",
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    if (action === "REJECT" || action === "WITHDRAW") {
+      transaction.update(sessionDocRef, {
+        status: "CANCELLED",
+        proposalResolution:
+          action === "REJECT" ? "REJECTED" : "WITHDRAWN",
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    if (
+      !(scheduledAt instanceof Date) ||
+      !Number.isFinite(scheduledAt.getTime()) ||
+      scheduledAt.getTime() <= Date.now()
+    ) {
+      throw new Error("Choose a valid future date and time.");
+    }
+
+    transaction.update(sessionDocRef, {
+      scheduledAt,
+      proposedBy: currentUserId,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function acceptSessionProposal(
+  sessionId: string
+): Promise<void> {
+  return updateSessionProposal(sessionId, "ACCEPT");
+}
+
+export async function rejectSessionProposal(
+  sessionId: string
+): Promise<void> {
+  return updateSessionProposal(sessionId, "REJECT");
+}
+
+export async function withdrawSessionProposal(
+  sessionId: string
+): Promise<void> {
+  return updateSessionProposal(sessionId, "WITHDRAW");
+}
+
+export async function suggestAnotherSessionTime(
+  sessionId: string,
+  scheduledAt: Date
+): Promise<void> {
+  return updateSessionProposal(sessionId, "RESCHEDULE", scheduledAt);
 }
 
 

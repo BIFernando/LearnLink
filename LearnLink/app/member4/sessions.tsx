@@ -10,16 +10,66 @@ import {
 } from "react-native";
 import { useFocusEffect, router } from "expo-router";
 
+import { useAuth } from "../../providers/AuthProvider";
 import { getUserSessions } from "../../services/member4/sessionService";
 import { Session } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 
 type SessionFilter = "UPCOMING" | "PAST";
 
+function getScheduledDate(value: unknown): Date | null {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim().length === 0)
+  ) {
+    return null;
+  }
+
+  let date: unknown;
+
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "string" || typeof value === "number") {
+    date = new Date(value);
+  } else if (typeof value === "object") {
+    try {
+      const toDate = (value as { toDate?: () => unknown }).toDate;
+      if (typeof toDate !== "function") {
+        return null;
+      }
+      date = toDate.call(value);
+    } catch {
+      return null;
+    }
+  } else {
+    return null;
+  }
+
+  if (!(date instanceof Date)) {
+    return null;
+  }
+
+  try {
+    return Number.isFinite(date.getTime()) ? date : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasValidProposer(proposedBy: unknown): proposedBy is string {
+  return (
+    typeof proposedBy === "string" &&
+    proposedBy.length > 0 &&
+    proposedBy.trim() === proposedBy
+  );
+}
+
 export default function SessionsScreen() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [filter, setFilter] = useState<SessionFilter>("UPCOMING");
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   const loadSessions = useCallback(async () => {
     try {
@@ -43,54 +93,106 @@ export default function SessionsScreen() {
 
   const now = Date.now();
 
+  const proposedSessions = sessions.filter(
+    (session) => session.status === "PROPOSED"
+  );
+  const futureProposals = proposedSessions.filter((session) => {
+    const date = getScheduledDate(session.scheduledAt);
+    return date !== null && date.getTime() >= now;
+  });
+  const pastProposals = proposedSessions.filter((session) => {
+    const date = getScheduledDate(session.scheduledAt);
+    return date !== null && date.getTime() < now;
+  });
+  const unknownDateProposals = proposedSessions.filter(
+    (session) => getScheduledDate(session.scheduledAt) === null
+  );
+  const unknownDateProposerProposals = unknownDateProposals.filter(
+    (session) => !hasValidProposer(session.proposedBy)
+  );
+  const unknownDateKnownProposals = unknownDateProposals.filter((session) =>
+    hasValidProposer(session.proposedBy)
+  );
+  const incomingProposals = user
+    ? futureProposals.filter(
+        (session) =>
+          hasValidProposer(session.proposedBy) &&
+          session.proposedBy !== user.uid
+      )
+    : [];
+  const awaitingResponse = user
+    ? futureProposals.filter(
+        (session) =>
+          hasValidProposer(session.proposedBy) &&
+          session.proposedBy === user.uid
+      )
+    : [];
+  const unknownProposerProposals = futureProposals.filter(
+    (session) => !hasValidProposer(session.proposedBy)
+  );
+  const pastUnknownProposals = pastProposals.filter(
+    (session) => !hasValidProposer(session.proposedBy)
+  );
+
   const upcomingSessions = sessions.filter(
-    (session) =>
-      ["PROPOSED", "CONFIRMED", "IN_PROGRESS"].includes(session.status) &&
-      new Date(session.scheduledAt).getTime() >= now
+    (session) => {
+      if (!["CONFIRMED", "IN_PROGRESS"].includes(session.status)) {
+        return false;
+      }
+
+      const date = getScheduledDate(session.scheduledAt);
+      return date !== null && date.getTime() >= now;
+    }
   );
 
   const pastSessions = sessions.filter(
-    (session) =>
-      ["COMPLETED", "CANCELLED", "DISPUTED"].includes(session.status) ||
-      (
-        ["PROPOSED", "CONFIRMED", "IN_PROGRESS"].includes(session.status) &&
-        new Date(session.scheduledAt).getTime() < now
-      )
+    (session) => {
+      if (["COMPLETED", "CANCELLED", "DISPUTED"].includes(session.status)) {
+        return true;
+      }
+      if (
+        !["PROPOSED", "CONFIRMED", "IN_PROGRESS"].includes(session.status) ||
+        (session.status === "PROPOSED" &&
+          !hasValidProposer(session.proposedBy))
+      ) {
+        return false;
+      }
+
+      const date = getScheduledDate(session.scheduledAt);
+      return date !== null && date.getTime() < now;
+    }
   );
 
   const displayedSessions =
     filter === "UPCOMING" ? upcomingSessions : pastSessions;
 
+  function openSessionDetails(sessionId: string) {
+    router.push({
+      pathname: "/member4/session-details",
+      params: { sessionId },
+    });
+  }
+
   function renderSession({ item }: { item: Session }) {
-    const dateValue =
-      item.scheduledAt instanceof Date
-        ? item.scheduledAt
-        : typeof item.scheduledAt?.toDate === "function"
-          ? item.scheduledAt.toDate()
-          : new Date(item.scheduledAt);
+    const dateValue = getScheduledDate(item.scheduledAt);
 
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() =>
-          router.push({
-            pathname: "/member4/session-details",
-            params: { sessionId: item.id },
-          })
-        }
+        onPress={() => openSessionDetails(item.id)}
       >
         <Text style={styles.cardTitle}>
           {item.sessionType === "ONLINE" ? "Online Session" : "In-person Session"}
         </Text>
 
         <Text>
-          Date: {Number.isNaN(dateValue.getTime())
+          Date: {dateValue === null
             ? "Date unavailable"
             : dateValue.toLocaleDateString()}
         </Text>
 
         <Text>
-          Time: {Number.isNaN(dateValue.getTime())
+          Time: {dateValue === null
             ? "Time unavailable"
             : dateValue.toLocaleTimeString([], {
                 hour: "2-digit",
@@ -103,6 +205,80 @@ export default function SessionsScreen() {
       </TouchableOpacity>
     );
   }
+
+  function renderProposal(
+    session: Session,
+    category: "INCOMING" | "OUTGOING" | "UNKNOWN" | "DATE_UNKNOWN"
+  ) {
+    const dateValue = getScheduledDate(session.scheduledAt);
+    const otherParticipantId =
+      user?.uid === session.teacherId ? session.learnerId : session.teacherId;
+    const proposer = hasValidProposer(session.proposedBy)
+      ? session.proposedBy
+      : null;
+    let proposalStatus = "Proposer unknown";
+    if (category === "INCOMING" && proposer) {
+      proposalStatus = `Proposed by: ${proposer}`;
+    } else if (category === "OUTGOING") {
+      proposalStatus = "The other participant must respond.";
+    } else if (category === "DATE_UNKNOWN" && proposer) {
+      proposalStatus =
+        proposer === user?.uid
+          ? "You proposed this time; awaiting response."
+          : `Proposed by: ${proposer}`;
+    }
+    const content = (
+      <>
+        <Text style={styles.cardTitle}>
+          {session.sessionType === "ONLINE" ? "Online Session" : "In-person Session"}
+        </Text>
+        <Text>Other participant: {otherParticipantId}</Text>
+        <Text>Skill: {session.skillId}</Text>
+        <Text>
+          Date: {dateValue === null
+            ? "Date unavailable"
+            : dateValue.toLocaleDateString()}
+        </Text>
+        <Text>
+          Time: {dateValue === null
+            ? "Time unavailable"
+            : dateValue.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+        </Text>
+        <Text>Duration: {session.duration} minutes</Text>
+        <Text style={styles.proposalStatus}>{proposalStatus}</Text>
+      </>
+    );
+
+    if (!proposer) {
+      return (
+        <View key={session.id} style={styles.card}>
+          {content}
+        </View>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        key={session.id}
+        style={styles.card}
+        onPress={() => openSessionDetails(session.id)}
+      >
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  const hasVisibleSessions =
+    displayedSessions.length > 0 ||
+    (filter === "UPCOMING" &&
+      (incomingProposals.length > 0 ||
+        awaitingResponse.length > 0 ||
+        unknownProposerProposals.length > 0 ||
+        unknownDateProposals.length > 0)) ||
+    (filter === "PAST" && pastUnknownProposals.length > 0);
 
   if (loading) {
     return (
@@ -139,18 +315,77 @@ export default function SessionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {displayedSessions.length === 0 ? (
-        <Text style={styles.empty}>
-          No {filter.toLowerCase()} sessions found.
-        </Text>
-      ) : (
-        <FlatList
-          data={displayedSessions}
-          keyExtractor={(item) => item.id}
-          renderItem={renderSession}
-          contentContainerStyle={styles.list}
-        />
-      )}
+      <FlatList
+        data={displayedSessions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderSession}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <View>
+            {filter === "UPCOMING" && (
+              <>
+                <Text style={styles.sectionHeader}>Incoming Proposals</Text>
+                {incomingProposals.length === 0 ? (
+                  <Text style={styles.sectionEmpty}>No incoming proposals.</Text>
+                ) : (
+                  incomingProposals.map((session) =>
+                    renderProposal(session, "INCOMING")
+                  )
+                )}
+
+                <Text style={styles.sectionHeader}>Awaiting Response</Text>
+                {awaitingResponse.length === 0 ? (
+                  <Text style={styles.sectionEmpty}>
+                    No proposals awaiting a response.
+                  </Text>
+                ) : (
+                  awaitingResponse.map((session) =>
+                    renderProposal(session, "OUTGOING")
+                  )
+                )}
+
+                {unknownProposerProposals.length > 0 && (
+                  <>
+                    <Text style={styles.sectionHeader}>Proposer Unknown</Text>
+                    {unknownProposerProposals.map((session) =>
+                      renderProposal(session, "UNKNOWN")
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            {filter === "PAST" && pastUnknownProposals.length > 0 && (
+              <>
+                <Text style={styles.sectionHeader}>Proposer Unknown</Text>
+                {pastUnknownProposals.map((session) =>
+                  renderProposal(session, "UNKNOWN")
+                )}
+              </>
+            )}
+            {filter === "UPCOMING" && unknownDateProposals.length > 0 && (
+              <>
+                <Text style={styles.sectionHeader}>Proposal Date Unknown</Text>
+                {unknownDateKnownProposals.map((session) =>
+                  renderProposal(session, "DATE_UNKNOWN")
+                )}
+                {unknownDateProposerProposals.length > 0 && (
+                  <>
+                    <Text style={styles.sectionHeader}>Proposer Unknown</Text>
+                    {unknownDateProposerProposals.map((session) =>
+                      renderProposal(session, "UNKNOWN")
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            {!hasVisibleSessions && (
+              <Text style={styles.empty}>
+                No {filter.toLowerCase()} sessions found.
+              </Text>
+            )}
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -171,5 +406,8 @@ const styles = StyleSheet.create({
   list: { paddingBottom: 20 },
   card: { padding: 15, borderWidth: 1, borderRadius: 10, marginBottom: 12 },
   cardTitle: { fontSize: 17, fontWeight: "bold", marginBottom: 8 },
+  sectionHeader: { fontSize: 20, fontWeight: "bold", marginBottom: 10 },
+  sectionEmpty: { textAlign: "center", color: "#666", marginBottom: 12 },
+  proposalStatus: { marginTop: 6, fontWeight: "600" },
   empty: { textAlign: "center", marginTop: 20 },
 });

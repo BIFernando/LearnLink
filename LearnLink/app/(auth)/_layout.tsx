@@ -16,11 +16,14 @@ export default function AuthLayout() {
     );
   }
 
-  if (user && isEmailVerified) {
+  if (
+    user &&
+    (isEmailVerified || (__DEV__ && currentRoute === "login"))
+  ) {
     return <Redirect href="/(tabs)" />;
   }
 
-  if (user && currentRoute !== "verify-email") {
+  if (user && !__DEV__ && currentRoute !== "verify-email") {
     return <Redirect href="/(auth)/verify-email" />;
   }
 

@@ -1,18 +1,18 @@
 import {
+  onAuthStateChanged,
+  reload,
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import {
   createContext,
-  useContext,
   useCallback,
+  useContext,
   useEffect,
   useRef,
   useState,
   type PropsWithChildren,
 } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import {
-  onAuthStateChanged,
-  reload,
-  type User as FirebaseUser,
-} from "firebase/auth";
 
 import { auth, db } from "@/config/firebase";
 import type { StudentProfileUpdate } from "@/schemas/studentProfile";
@@ -228,7 +228,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         };
 
         void loadStudentProfile();
-        void loadStudentProfile(firebaseUser, currentAuthChangeId);
       },
       (listenerError) => {
         if (!isMounted.current) {
@@ -338,19 +337,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user,
     studentProfile,
     isLoading,
-ailVerified: user?.emailVerified ?? false,
-
-    isEmailVerified,
+    isEmailVerified: user?.emailVerified ?? false,
     refreshEmailVerification,
     refreshStudentProfile,
     saveStudentProfile: saveCurrentStudentProfile,
     uploadStudentProfilePhoto: uploadCurrentStudentProfilePhoto,
-
-    isEmailVerified,
-    refreshEmailVerification,
-    saveStudentProfile: saveCurrentStudentProfile,
-    uploadStudentProfilePhoto: uploadCurrentStudentProfilePhoto,
-
     error,
   };
 

@@ -8,6 +8,7 @@ import {
 } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -20,6 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Avatar, type IoniconName } from "@/components/member5/ui";
 import { m5Colors } from "@/constants/member5Theme";
 import { useAuth } from "@/providers/AuthProvider";
+import { signOutStudent } from "@/services/authService";
 
 const routes = {
   home: "/" as Href,
@@ -123,6 +125,8 @@ export function LearnLinkNavigation() {
   const router = useRouter();
   const { user, studentProfile } = useAuth();
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const isAuthRoute = segments[0] === "(auth)";
   const showChrome =
     !isAuthRoute && !pathname.startsWith("/admin") && pathname !== "/modal";
@@ -142,6 +146,29 @@ export function LearnLinkNavigation() {
   function navigate(href: Href) {
     setDrawerVisible(false);
     router.navigate(href);
+  }
+
+  async function handleSignOut() {
+    if (isSigningOut) {
+      return;
+    }
+
+    setIsSigningOut(true);
+    setSignOutError(null);
+    try {
+      await signOutStudent();
+      setDrawerVisible(false);
+      router.replace("/(auth)/login");
+    } catch (error) {
+      console.error("Failed to sign out student:", error);
+      setSignOutError(
+        error instanceof Error
+          ? error.message
+          : "Sign out failed. Please try again.",
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
   }
 
   return (
@@ -368,6 +395,26 @@ export function LearnLinkNavigation() {
                 </Pressable>
               ))}
             </ScrollView>
+            {signOutError ? (
+              <Text accessibilityRole="alert" style={styles.drawerSignOutError}>
+                {signOutError}
+              </Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSigningOut}
+              onPress={handleSignOut}
+              style={({ pressed }) => [
+                styles.drawerSignOutButton,
+                (pressed || isSigningOut) && styles.drawerSignOutButtonMuted,
+              ]}
+            >
+              {isSigningOut ? (
+                <ActivityIndicator color={m5Colors.white} />
+              ) : (
+                <Text style={styles.drawerSignOutText}>Sign Out</Text>
+              )}
+            </Pressable>
           </SafeAreaView>
         </View>
       </Modal>
@@ -525,5 +572,27 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
+  },
+  drawerSignOutError: {
+    color: "#B42318",
+    fontSize: 13,
+    marginTop: 12,
+  },
+  drawerSignOutButton: {
+    alignItems: "center",
+    backgroundColor: "#B42318",
+    borderRadius: 10,
+    justifyContent: "center",
+    marginBottom: 10,
+    marginTop: 12,
+    minHeight: 48,
+  },
+  drawerSignOutButtonMuted: {
+    opacity: 0.7,
+  },
+  drawerSignOutText: {
+    color: m5Colors.white,
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

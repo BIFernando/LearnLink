@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter, type Href } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -23,6 +24,7 @@ import {
 } from "@/components/member5/ui";
 import { StudentRouteGuard } from "@/components/auth/StudentRouteGuard";
 import { m5Colors } from "@/constants/member5Theme";
+import { signOutStudent } from "@/services/authService";
 import { deleteUserSkill, getMySkills } from "@/services/member2/skillService";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SkillType, StudentSkill } from "@/types/member2/skills";
@@ -53,6 +55,8 @@ export function MySkillsScreen() {
   const [skills, setSkills] = useState<StudentSkill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const loadSkills = useCallback(async () => {
     setIsLoading(true);
@@ -119,6 +123,27 @@ export function MySkillsScreen() {
       ? (`/skills/${encodeURIComponent(skillEntryId)}` as Href)
       : ("/skills/new" as Href);
     router.push(href);
+  }
+
+  async function handleSignOut() {
+    if (isSigningOut) {
+      return;
+    }
+
+    setIsSigningOut(true);
+    setSignOutError(null);
+    try {
+      await signOutStudent();
+      router.replace("/(auth)/login");
+    } catch (signOutFailure) {
+      setSignOutError(
+        signOutFailure instanceof Error
+          ? signOutFailure.message
+          : "Sign out failed. Please try again.",
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
   }
 
   const displayName =
@@ -274,6 +299,26 @@ export function MySkillsScreen() {
             );
           })
         )}
+        {signOutError ? (
+          <Text accessibilityRole="alert" style={styles.signOutError}>
+            {signOutError}
+          </Text>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          disabled={isSigningOut}
+          onPress={handleSignOut}
+          style={({ pressed }) => [
+            styles.signOutButton,
+            (pressed || isSigningOut) && styles.buttonMuted,
+          ]}
+        >
+          {isSigningOut ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.signOutButtonText}>Sign Out</Text>
+          )}
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -408,5 +453,26 @@ const styles = StyleSheet.create({
     color: m5Colors.textSecondary,
     fontSize: 12,
     lineHeight: 17,
+  },
+  signOutButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#B42318",
+    borderRadius: 10,
+    justifyContent: "center",
+    minHeight: 50,
+  },
+  signOutButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  signOutError: {
+    color: "#B42318",
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  buttonMuted: {
+    opacity: 0.7,
   },
 });

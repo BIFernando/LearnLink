@@ -13,6 +13,7 @@ export class MatchingService {
         userId: docItem.id,
         ...docItem.data(),
       }));
+      console.log("Total Users found in Firebase:", allUsers.length);
 
       const skillsSnap = await getDocs(collection(firestore, 'userSkills'));
       const allUserSkills = skillsSnap.docs.map((docItem) => ({

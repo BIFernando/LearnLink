@@ -357,7 +357,8 @@ service cloud.firestore {
     // =====================================================================
     // Member 5: Chat, Notifications, Gamification
     // Cloud Functions (Admin SDK) bypass these rules. XP, levels, ratings,
-    // badges, attempts and notifications are written only by functions.
+    // badges, attempts and notifications are written only by functions
+    // (exception: exchange notifications, see validExchangeNotification).
     // =====================================================================
 
     function conversationData(conversationId) {
@@ -433,13 +434,55 @@ service cloud.firestore {
       }
     }
 
+    // Spark-plan fallback: the app creates exchange notifications itself. The id is
+    // `${type}_${requestId}_${userId}`, the same id onExchangeRequestWritten uses,
+    // so client and function never write duplicates. The exchange request must
+    // exist and the writer/recipient must hold the right roles in it.
+    function validExchangeNotification(notificationId) {
+      let n = request.resource.data;
+      let exchange = get(
+        /databases/$(database)/documents/exchangeRequests/$(n.referenceId)
+      ).data;
+      return n.keys().hasOnly([
+          'userId', 'type', 'title', 'body', 'referenceId', 'isRead', 'createdAt'
+        ])
+        && n.keys().hasAll([
+          'userId', 'type', 'title', 'body', 'referenceId', 'isRead', 'createdAt'
+        ])
+        && n.type in ['EXCHANGE_REQUEST', 'REQUEST_ACCEPTED', 'REQUEST_REJECTED']
+        && isNonEmptyString(n.userId)
+        && isNonEmptyString(n.referenceId)
+        && notificationId == n.type + '_' + n.referenceId + '_' + n.userId
+        && n.isRead == false
+        && n.createdAt == request.time
+        && isNonEmptyString(n.title) && n.title.size() <= 100
+        && isNonEmptyString(n.body) && n.body.size() <= 300
+        && (
+          // Sender tells the receiver about a new request.
+          (n.type == 'EXCHANGE_REQUEST'
+            && exchange.senderId == request.auth.uid
+            && exchange.receiverId == n.userId
+            && exchange.status == 'PENDING')
+          // Receiver tells the sender about the decision.
+          || (n.type == 'REQUEST_ACCEPTED'
+            && exchange.receiverId == request.auth.uid
+            && exchange.senderId == n.userId
+            && exchange.status in ['ACCEPTED', 'COMPLETED'])
+          || (n.type == 'REQUEST_REJECTED'
+            && exchange.receiverId == request.auth.uid
+            && exchange.senderId == n.userId
+            && exchange.status == 'REJECTED')
+        );
+    }
+
     match /notifications/{notificationId} {
       allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
         && request.resource.data.isRead == true;
-      allow create: if false;
+      // All other notification types are created only by Cloud Functions.
+      allow create: if signedIn() && validExchangeNotification(notificationId);
     }
 
     // Review id == `${sessionId}_${reviewerId}`: one review per reviewer per session.

@@ -17,6 +17,7 @@ import {
 
 import { ExchangeRequest } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
+import { ReportActionButton } from "../../components/reports/ReportActionButton";
 
 export default function ExchangeRequestDetailsScreen() {
   const { requestId } = useLocalSearchParams<{
@@ -300,6 +301,21 @@ export default function ExchangeRequestDetailsScreen() {
         </View>
       )}
 
+      {(isIncoming || isOutgoing) ? (
+        <View style={styles.reportActions}>
+            <ReportActionButton
+              targetType="USER"
+              targetId={isIncoming ? request.senderId : request.receiverId}
+              label="Report the other participant"
+            />
+            <ReportActionButton
+              targetType="EXCHANGE_REQUEST"
+              targetId={request.id}
+              label="Report this exchange request"
+            />
+        </View>
+      ) : null}
+
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => router.back()}
@@ -354,6 +370,9 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: 20,
     gap: 10,
+  },
+  reportActions: {
+    marginTop: 12,
   },
 
   acceptButton: {

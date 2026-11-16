@@ -1,98 +1,253 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Member5Shortcuts } from "@/components/member5/Member5Shortcuts";
+import { IconBubble, type IoniconName } from "@/components/member5/ui";
+import { m5Colors } from "@/constants/member5Theme";
+
+type HomeFeature = {
+  title: string;
+  description: string;
+  icon: IoniconName;
+  href: Href;
+};
+
+const MATCHES_ROUTE = "/matches" as Href;
+
+const FEATURES: HomeFeature[] = [
+  {
+    title: "Discover skills",
+    description: "Browse student portfolios",
+    icon: "compass-outline",
+    href: "/explore",
+  },
+  {
+    title: "Skill matches",
+    description: "Find students to learn with",
+    icon: "people-outline",
+    href: MATCHES_ROUTE,
+  },
+  {
+    title: "My Skills",
+    description: "Manage your skill portfolio",
+    icon: "school-outline",
+    href: "/my-skills",
+  },
+  {
+    title: "Exchange requests",
+    description: "Review incoming and sent requests",
+    icon: "mail-outline",
+    href: "/member4/exchange-requests",
+  },
+  {
+    title: "My exchanges",
+    description: "See your active skill exchanges",
+    icon: "swap-horizontal-outline",
+    href: "/member4/my-exchanges",
+  },
+  {
+    title: "Upcoming sessions",
+    description: "Check your scheduled sessions",
+    icon: "calendar-outline",
+    href: "/member4/sessions",
+  },
+  {
+    title: "Credit wallet",
+    description: "View your balance and activity",
+    icon: "wallet-outline",
+    href: "/member4/credit-wallet",
+  },
+];
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.brand}>LEARNLINK</Text>
+          <Text style={styles.title}>Learn by sharing.</Text>
+          <Text style={styles.subtitle}>
+            Exchange skills, meet your learning community, and grow together.
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(MATCHES_ROUTE)}
+          style={({ pressed }) => [
+            styles.hero,
+            pressed && styles.heroPressed,
+          ]}
+        >
+          <View style={styles.heroTopRow}>
+            <Text style={styles.heroEyebrow}>YOUR NEXT SKILL EXCHANGE</Text>
+            <Ionicons name="arrow-forward" size={22} color={m5Colors.white} />
+          </View>
+          <Text style={styles.heroTitle}>Find your learning match</Text>
+          <Text style={styles.heroDescription}>
+            Connect with students who can teach what you want to learn.
+          </Text>
+          <View style={styles.heroAction}>
+            <Text style={styles.heroActionText}>Explore skill matches</Text>
+            <Ionicons name="arrow-forward" size={17} color={m5Colors.white} />
+          </View>
+        </Pressable>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your exchange hub</Text>
+          <View style={styles.featureGrid}>
+            {FEATURES.map((feature) => (
+              <Pressable
+                accessibilityRole="button"
+                key={feature.title}
+                onPress={() => router.push(feature.href)}
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  pressed && styles.featureCardPressed,
+                ]}
+              >
+                <IconBubble icon={feature.icon} size={42} />
+                <Text style={styles.featureTitle}>{feature.title}</Text>
+                <Text style={styles.featureDescription}>
+                  {feature.description}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Stay connected</Text>
+          <Member5Shortcuts />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  safeArea: {
+    backgroundColor: m5Colors.background,
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
+  content: {
+    padding: 20,
+    paddingBottom: 28,
+  },
+  header: {
+    marginBottom: 20,
+  },
+  brand: {
+    color: m5Colors.primary,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.5,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  title: {
+    color: m5Colors.textPrimary,
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  subtitle: {
+    color: m5Colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 6,
+  },
+  hero: {
+    backgroundColor: m5Colors.primary,
+    borderRadius: 22,
+    marginBottom: 28,
+    padding: 20,
+  },
+  heroPressed: {
+    opacity: 0.9,
+  },
+  heroTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  heroEyebrow: {
+    color: "#DADAFF",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    color: m5Colors.white,
+    fontSize: 23,
+    fontWeight: "800",
+    marginTop: 16,
+  },
+  heroDescription: {
+    color: "#E7E7FF",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 7,
+    maxWidth: 300,
+  },
+  heroAction: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderRadius: 12,
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  heroActionText: {
+    color: m5Colors.white,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  section: {
+    marginBottom: 28,
+  },
+  sectionTitle: {
+    color: m5Colors.textPrimary,
+    fontSize: 19,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+  featureGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  featureCard: {
+    backgroundColor: m5Colors.card,
+    borderColor: m5Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 148,
+    padding: 14,
+  },
+  featureCardPressed: {
+    opacity: 0.75,
+  },
+  featureTitle: {
+    color: m5Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: 12,
+  },
+  featureDescription: {
+    color: m5Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
   },
 });

@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { Ionicons } from '@expo/vector-icons';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -17,6 +18,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
           headerShown: false,
           tabBarButton: HapticTab,
+          tabBarStyle: { display: 'none' },
         }}>
         <Tabs.Screen
           name="index"
@@ -42,6 +44,13 @@ export default function TabLayout() {
         <Tabs.Screen
           name="edit-profile"
           options={{ href: null }}
+        />
+        <Tabs.Screen
+          name="matches"
+          options={{
+            title: 'Matches',
+            tabBarIcon: ({ color }) => <Ionicons size={28} name="extension-puzzle" color={color} />,
+          }}
         />
       </Tabs>
     </StudentRouteGuard>

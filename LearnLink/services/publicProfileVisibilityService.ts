@@ -1,7 +1,7 @@
 import { getIdTokenResult } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 
-import { auth, functions } from "../config/firebase";
+import { auth, defaultFunctions } from "../config/firebase";
 
 export interface PublicProfileVisibility {
   userId: string;
@@ -13,15 +13,15 @@ type EmptyRequest = Record<string, never>;
 const getVisibilityCallable = httpsCallable<
   EmptyRequest,
   PublicProfileVisibility
->(functions, "getPublicProfileVisibility");
+>(defaultFunctions, "getPublicProfileVisibility");
 const enableVisibilityCallable = httpsCallable<
   EmptyRequest,
   PublicProfileVisibility
->(functions, "enablePublicProfileVisibility");
+>(defaultFunctions, "enablePublicProfileVisibility");
 const disableVisibilityCallable = httpsCallable<
   EmptyRequest,
   PublicProfileVisibility
->(functions, "disablePublicProfileVisibility");
+>(defaultFunctions, "disablePublicProfileVisibility");
 
 async function getVerifiedStudentUid(): Promise<string> {
   const user = auth.currentUser;

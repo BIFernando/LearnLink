@@ -49,12 +49,34 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (__DEV__) {
+      console.log("[AuthProvider] isLoading state:", isLoading);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
     let isActive = true;
     let authChangeId = 0;
+    let hasReceivedInitialAuthCallback = false;
+
+    if (__DEV__) {
+      console.log("[AuthProvider] Waiting for initial Firebase auth callback.");
+    }
 
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
+        if (!hasReceivedInitialAuthCallback) {
+          hasReceivedInitialAuthCallback = true;
+          if (__DEV__) {
+            console.log("[AuthProvider] Initial Firebase auth callback executed.");
+            console.log(
+              "[AuthProvider] firebaseUser === null:",
+              firebaseUser === null,
+            );
+          }
+        }
+
         const currentAuthChangeId = ++authChangeId;
 
         setUser(firebaseUser);
@@ -68,10 +90,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         const loadStudentProfile = async () => {
+          if (__DEV__) {
+            console.log("[AuthProvider] Firestore student profile load started.");
+          }
+
           try {
             const profileSnapshot = await getDoc(
               doc(db, "users", firebaseUser.uid),
             );
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load completed.");
+            }
 
             if (!isActive || currentAuthChangeId !== authChangeId) {
               return;
@@ -84,6 +113,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
               });
             }
           } catch (error) {
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load failed.");
+            }
+
             if (!isActive || currentAuthChangeId !== authChangeId) {
               return;
             }

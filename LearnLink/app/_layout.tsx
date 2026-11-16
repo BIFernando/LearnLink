@@ -1,8 +1,8 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { LearnLinkNavigation } from '@/components/navigation/LearnLinkNavigation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/providers/AuthProvider';
 
@@ -18,36 +18,7 @@ export default function RootLayout() {
       <ThemeProvider
         value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
       >
-        <Stack>
-          <Stack.Screen
-            name="(tabs)"
-            options={{ headerShown: false }}
-          />
-
-          <Stack.Screen
-            name="modal"
-            options={{
-              presentation: "modal",
-              title: "Modal",
-            }}
-          />
-
-      <Stack.Screen
-        name="member4"
-        options={{
-          headerShown: true,
-          title: "Member 4",
-        }}
-      />
-
-      <Stack.Screen
-        name="admin"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
-
+        <LearnLinkNavigation />
         <StatusBar style="auto" />
       </ThemeProvider>
     </AuthProvider>

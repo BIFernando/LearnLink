@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { createExchangeRequest } from '../../services/member4/exchangeService';
@@ -8,12 +8,51 @@ import { getCurrentUserId } from "../../services/member4/currentUser";
 import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 
 export default function CreateExchangeRequest() {
+  const params = useLocalSearchParams<{
+    receiverId?: string;
+    receiverName?: string;
+    offeredSkillId?: string;
+    offeredSkillName?: string;
+    requestedSkillId?: string;
+    requestedSkillName?: string;
+  }>();
   const [receiverId, setReceiverId] = useState('');
+  const [receiverName, setReceiverName] = useState('');
   const [offeredSkillId, setOfferedSkillId] = useState('');
+  const [offeredSkillName, setOfferedSkillName] = useState('');
   const [requestedSkillId, setRequestedSkillId] = useState('');
+  const [requestedSkillName, setRequestedSkillName] = useState('');
   const [message, setMessage] = useState('');
   const [exchangeType, setExchangeType] = useState<ExchangeType>('DIRECT');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof params.receiverId === "string") {
+      setReceiverId(params.receiverId);
+    }
+    if (typeof params.receiverName === "string") {
+      setReceiverName(params.receiverName);
+    }
+    if (typeof params.offeredSkillId === "string") {
+      setOfferedSkillId(params.offeredSkillId);
+    }
+    if (typeof params.offeredSkillName === "string") {
+      setOfferedSkillName(params.offeredSkillName);
+    }
+    if (typeof params.requestedSkillId === "string") {
+      setRequestedSkillId(params.requestedSkillId);
+    }
+    if (typeof params.requestedSkillName === "string") {
+      setRequestedSkillName(params.requestedSkillName);
+    }
+  }, [
+    params.offeredSkillId,
+    params.offeredSkillName,
+    params.receiverId,
+    params.receiverName,
+    params.requestedSkillId,
+    params.requestedSkillName,
+  ]);
 
   //Submit function
   async function handleSubmit() {
@@ -89,6 +128,9 @@ return (
         onChangeText={setReceiverId}
         autoCapitalize="none"
       />
+      {receiverName ? (
+        <Text style={styles.selectionHint}>Requesting an exchange with {receiverName}</Text>
+      ) : null}
 
       <Text style={styles.label}>
         Skill You Offer
@@ -101,6 +143,9 @@ return (
         onChangeText={setOfferedSkillId}
         autoCapitalize="none"
       />
+      {offeredSkillName ? (
+        <Text style={styles.selectionHint}>Selected from your portfolio: {offeredSkillName}</Text>
+      ) : null}
 
       <Text style={styles.label}>
         Skill You Want
@@ -113,6 +158,9 @@ return (
         onChangeText={setRequestedSkillId}
         autoCapitalize="none"
       />
+      {requestedSkillName ? (
+        <Text style={styles.selectionHint}>Requested from their portfolio: {requestedSkillName}</Text>
+      ) : null}
 
       <Text style={styles.label}>
         Exchange Type
@@ -206,6 +254,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+  },
+
+  selectionHint: {
+    color: "#5C5F73",
+    fontSize: 12,
+    marginTop: 5,
   },
 
   messageInput: {

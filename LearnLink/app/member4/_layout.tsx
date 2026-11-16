@@ -6,7 +6,7 @@ import { StudentRouteGuard } from "@/components/auth/StudentRouteGuard";
 export default function Member4Layout() {
   return (
     <StudentRouteGuard>
-      <Stack>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen
           name="exchange-requests"
           options={{ title: "Exchange Requests" }}
@@ -25,6 +25,11 @@ export default function Member4Layout() {
         <Stack.Screen
           name="my-exchanges"
           options={{ title: "My Exchanges" }}
+        />
+
+        <Stack.Screen
+          name="select-exchange-for-session"
+          options={{ title: "Select Exchange" }}
         />
 
         <Stack.Screen

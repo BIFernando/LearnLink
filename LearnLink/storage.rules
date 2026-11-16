@@ -22,10 +22,49 @@ service firebase.storage {
         ];
     }
 
+    function isConversationParticipant(conversationId) {
+      let conversationPath = /databases/(default)/documents/conversations/$(conversationId);
+      return request.auth != null
+        && request.auth.uid in firestore.get(conversationPath).data.participantIds;
+    }
+
+    function isValidChatImage() {
+      return request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/heic',
+          'image/heif'
+        ];
+    }
+
+    function isValidStorageHealthCheck() {
+      return request.resource.size <= 1024
+        && request.resource.contentType == 'text/plain';
+    }
+
     match /profilePictures/{userId}/{fileName} {
       allow read: if isVerifiedNonAdminStudent();
       allow create, update: if isOwner(userId) && isValidProfileImage();
       allow delete: if isOwner(userId);
+    }
+
+    match /storageHealthChecks/{userId}/connectivity.txt {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidStorageHealthCheck();
+      allow delete: if isOwner(userId);
+    }
+
+    match /chatImages/{conversationId}/{senderId}/{fileName} {
+      allow read: if isVerifiedNonAdminStudent()
+        && isConversationParticipant(conversationId);
+      allow create: if isOwner(senderId)
+        && isConversationParticipant(conversationId)
+        && isValidChatImage();
+      allow update: if false;
+      allow delete: if isOwner(senderId)
+        && isConversationParticipant(conversationId);
     }
   }
 }

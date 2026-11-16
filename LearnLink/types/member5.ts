@@ -48,6 +48,8 @@ export interface Message {
   messageId: string;
   senderId: string;
   text: string;
+  imageUrl?: string;
+  imageBase64?: string;
   createdAt: FirestoreDate;
   isRead: boolean;
 }

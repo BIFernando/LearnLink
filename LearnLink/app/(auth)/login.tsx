@@ -149,7 +149,7 @@ export default function StudentLoginScreen() {
 
     try {
       const user = await signInStudent(validation.data);
-      if (!user.emailVerified) {
+      if (!user.emailVerified && !__DEV__) {
         router.replace({
           pathname: "/(auth)/verify-email",
           params: { email: user.email ?? validation.data.email },

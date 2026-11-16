@@ -141,7 +141,7 @@ export function StudentRouteGuard({ children }: PropsWithChildren) {
     return <Redirect href="/admin" />;
   }
 
-  if (!isEmailVerified) {
+  if (!isEmailVerified && !__DEV__) {
     return <Redirect href="/(auth)/verify-email" />;
   }
 

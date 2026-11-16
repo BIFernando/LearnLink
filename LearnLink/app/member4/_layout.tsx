@@ -2,11 +2,17 @@
 import { Stack } from "expo-router";
 
 import { StudentRouteGuard } from "@/components/auth/StudentRouteGuard";
+import { m5Colors } from "@/constants/member5Theme";
 
 export default function Member4Layout() {
   return (
     <StudentRouteGuard>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: m5Colors.background },
+        }}
+      >
         <Stack.Screen
           name="exchange-requests"
           options={{ title: "Exchange Requests" }}

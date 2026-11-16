@@ -231,9 +231,19 @@ export const getSkillName = (skillId: string): Promise<string | null> => {
   const cached = skillNameCache.get(skillId);
   if (cached) return cached;
   const request = getDoc(doc(db, 'skills', skillId))
-    .then((snapshot) => {
+    .then(async (snapshot) => {
       const name = snapshot.get('name');
-      return typeof name === 'string' ? name : null;
+      if (typeof name === 'string') return name;
+
+      const userSkillSnapshot = await getDocs(
+        query(
+          collection(db, 'userSkills'),
+          where('skillId', '==', skillId),
+          limit(1)
+        )
+      );
+      const personalSkillName = userSkillSnapshot.docs[0]?.get('skillName');
+      return typeof personalSkillName === 'string' ? personalSkillName : null;
     })
     .catch(() => null);
   skillNameCache.set(skillId, request);

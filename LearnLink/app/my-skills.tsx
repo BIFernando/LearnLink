@@ -235,7 +235,11 @@ export function MySkillsScreen() {
                       <View style={styles.skillHeading}>
                         <Text style={styles.skillName}>{skill.skillName}</Text>
                         <Text style={styles.skillCategory}>
-                          {skill.categoryId ? "Catalog skill" : "Skill"}
+                          {skill.isCustom
+                            ? "Custom skill"
+                            : skill.categoryId
+                              ? "Catalog skill"
+                              : "Skill"}
                         </Text>
                       </View>
                       <Pressable

@@ -257,6 +257,22 @@ export default function AccountScreen() {
                   <ThemedText>No education details added yet.</ThemedText>
                 )}
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Manage my skills"
+                onPress={() => router.push('/my-skills')}
+                style={styles.manageSkillsButton}
+              >
+                <View style={styles.manageSkillsCopy}>
+                  <ThemedText type="defaultSemiBold">My Skills</ThemedText>
+                  <ThemedText>
+                    Add, update, or remove skills in your portfolio.
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.manageSkillsAction}>
+                  Manage
+                </ThemedText>
+              </Pressable>
             </View>
           )}
         </View>
@@ -394,6 +410,25 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
     paddingTop: 14,
+  },
+  manageSkillsButton: {
+    alignItems: 'center',
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginTop: 16,
+    padding: 12,
+  },
+  manageSkillsCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  manageSkillsAction: {
+    color: '#3159A5',
+    fontWeight: '700',
   },
   educationRow: {
     flexDirection: 'row',

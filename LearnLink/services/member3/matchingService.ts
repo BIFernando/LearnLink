@@ -1,7 +1,7 @@
 import { db as firestore } from '../../config/firebase';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { MatchingEngine } from './MatchingEngine';
-import type { IMatch, IUser } from '../../../src/types/matching.types';
+import type { IMatch, IUser } from '../../types/matching.types';
 
 const engine = new MatchingEngine();
 

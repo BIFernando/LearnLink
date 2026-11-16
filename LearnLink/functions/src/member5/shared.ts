@@ -154,7 +154,7 @@ export async function awardXp(input: AwardXpInput): Promise<AwardXpResult> {
     .orderBy("createdAt", "desc")
     .limit(1);
 
-  return firestore.runTransaction(async (transaction) => {
+  return firestore.runTransaction(async (transaction: Transaction) => {
     const [existing, userSnap, lastActivity] = await Promise.all([
       transaction.get(txRef),
       transaction.get(userRef),

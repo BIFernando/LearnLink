@@ -3,8 +3,13 @@ import {
   FieldValue,
   getFirestore,
   Timestamp,
+  type Transaction,
 } from "firebase-admin/firestore";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import {
+  HttpsError,
+  onCall,
+  type CallableRequest,
+} from "firebase-functions/v2/https";
 
 import {
   REPORT_REASONS,
@@ -22,7 +27,7 @@ initializeApp();
 
 const db = getFirestore();
 
-function requireUser(request: { auth?: { uid: string } | null }): string {
+function requireUser(request: CallableRequest<unknown>): string {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in to submit a report.");
   }
@@ -56,7 +61,7 @@ function isRecognizedOpenReport(data: FirebaseFirestore.DocumentData): boolean {
   );
 }
 
-export const submitReport = onCall(async (request) => {
+export const submitReport = onCall(async (request: CallableRequest<unknown>) => {
   const reporterId = requireUser(request);
   let input;
 
@@ -130,7 +135,7 @@ export const submitReport = onCall(async (request) => {
   return { reportId: reportReference.id };
 });
 
-export const moderateReport = onCall(async (request) => {
+export const moderateReport = onCall(async (request: CallableRequest<unknown>) => {
   const adminUid = requireUser(request);
   if (request.auth?.token.admin !== true) {
     throw new HttpsError("permission-denied", "Administrator access is required.");
@@ -152,7 +157,7 @@ export const moderateReport = onCall(async (request) => {
     .doc();
   const newStatus = input.action === "RESOLVE" ? "RESOLVED" : "REJECTED";
 
-  await db.runTransaction(async (transaction) => {
+  await db.runTransaction(async (transaction: Transaction) => {
     const reportSnapshot = await transaction.get(reportReference);
     if (!reportSnapshot.exists) {
       throw new HttpsError("not-found", "The report was not found.");

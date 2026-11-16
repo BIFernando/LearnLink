@@ -133,7 +133,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let isActive = true;
-    let authChangeId = 0;
     let hasReceivedInitialAuthCallback = false;
 
     if (__DEV__) {
@@ -155,8 +154,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
             );
           }
         }
-
-        const currentAuthChangeId = ++authChangeId;
 
         if (!hasReceivedInitialAuthCallback) {
           hasReceivedInitialAuthCallback = true;
@@ -197,7 +194,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
               console.log("[AuthProvider] Firestore student profile load completed.");
             }
 
-            if (!isActive || currentAuthChangeId !== authChangeId) {
+            if (!isActive || currentAuthChangeId !== authChangeId.current) {
               return;
             }
 
@@ -212,7 +209,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
               console.log("[AuthProvider] Firestore student profile load failed.");
             }
 
-            if (!isActive || currentAuthChangeId !== authChangeId) {
+            if (!isActive || currentAuthChangeId !== authChangeId.current) {
               return;
             }
 
@@ -224,7 +221,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             console.error("Failed to load the current student profile.", error);
             setError(message);
           } finally {
-            if (isActive && currentAuthChangeId === authChangeId) {
+            if (isActive && currentAuthChangeId === authChangeId.current) {
               setIsLoading(false);
             }
           }

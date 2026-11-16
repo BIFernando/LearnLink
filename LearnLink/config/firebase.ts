@@ -2,40 +2,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // Firebase 12.18.0's shared types omit this React Native runtime export.
 // @ts-expect-error React Native export is missing from Firebase's shared declarations.
-import { getReactNativePersistence, initializeAuth } from "firebase/auth";
-
-import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
-import { getStorage } from "firebase/storage";
-
-
 import { connectAuthEmulator, getReactNativePersistence, initializeAuth } from "firebase/auth";
+import { connectFirestoreEmulator } from "firebase/firestore";
+import { connectFunctionsEmulator } from "firebase/functions";
+import { connectStorageEmulator } from "firebase/storage";
 import {
-  connectFirestoreEmulator,
-  getFirestore,
-} from "firebase/firestore";
-import {
-  connectFunctionsEmulator,
-  getFunctions,
-} from "firebase/functions";
-import {
-  connectStorageEmulator,
-  getStorage,
-} from "firebase/storage";
+  app,
+  db,
+  defaultFunctions,
+  functions,
+  storage,
+  connectFirebaseEmulators,
+} from "./firebase.shared";
 
-
-import { app, connectFirebaseEmulators } from "./firebase.shared";
-
-export { app, db, defaultFunctions, functions, storage } from "./firebase.shared";
+export { app, db, defaultFunctions, functions, storage };
 
 export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
 connectFirebaseEmulators(auth);
-
-export const defaultFunctions = getFunctions(app);
-export const storage = getStorage(app);
 
 if (
   __DEV__ &&

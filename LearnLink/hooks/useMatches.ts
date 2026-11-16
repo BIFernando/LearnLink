@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { IMatch } from "../../src/types/matching.types";
+import type { IMatch } from "../types/matching.types";
 
 import { auth } from "../config/firebase";
 import { MatchingService } from "../services/member3/matchingService";

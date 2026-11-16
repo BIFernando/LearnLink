@@ -1,4 +1,9 @@
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import {
+  onDocumentCreated,
+  type FirestoreEvent,
+  type QueryDocumentSnapshot,
+} from "firebase-functions/v2/firestore";
+import type { Transaction } from "firebase-admin/firestore";
 
 import { checkBadges } from "./badges";
 import { COLLECTIONS, REGION, awardXp, createNotification, db, getDisplayName, numberOr } from "./shared";
@@ -10,7 +15,9 @@ import { XP_PER_REVIEW } from "./xpRules";
  */
 export const onReviewCreated = onDocumentCreated(
   { document: "reviews/{reviewId}", region: REGION },
-  async (event) => {
+  async (
+    event: FirestoreEvent<QueryDocumentSnapshot | undefined, { reviewId: string }>,
+  ) => {
     const review = event.data?.data();
     if (!review) return;
     const { reviewId } = event.params;
@@ -25,7 +32,7 @@ export const onReviewCreated = onDocumentCreated(
     const reviewRef = firestore.collection(COLLECTIONS.reviews).doc(reviewId);
 
     // `ratingCounted` (server-only) stops a retried trigger from counting the review twice.
-    const counted = await firestore.runTransaction(async (transaction) => {
+    const counted = await firestore.runTransaction(async (transaction: Transaction) => {
       const [userSnap, reviewSnap] = await Promise.all([
         transaction.get(revieweeRef),
         transaction.get(reviewRef),

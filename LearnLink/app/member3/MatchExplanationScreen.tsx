@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProgressBar } from '../../components/member3/matching-components';
 import { MatchingService } from '../../services/member3/matchingService';
 import { auth } from '../../config/firebase';
-import type { IMatch, IUser } from '../../../src/types/matching.types';
+import type { IMatch, IUser } from '../../types/matching.types';
 
 const matchingService = new MatchingService();
 

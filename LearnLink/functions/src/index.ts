@@ -3,6 +3,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import {
   FieldValue,
   getFirestore,
+  type Transaction,
   type DocumentData,
   Timestamp,
 } from "firebase-admin/firestore";
@@ -226,7 +227,7 @@ export const enablePublicProfileVisibility = onCall(
     const publicProfileRef = publicProfilesCollection.doc(uid);
 
     try {
-      await db.runTransaction(async (transaction) => {
+      await db.runTransaction(async (transaction: Transaction) => {
         const privateSnapshot = await transaction.get(userRef);
 
         if (!privateSnapshot.exists) {
@@ -270,7 +271,7 @@ export const disablePublicProfileVisibility = onCall(
     const publicProfileRef = publicProfilesCollection.doc(uid);
 
     try {
-      await db.runTransaction(async (transaction) => {
+      await db.runTransaction(async (transaction: Transaction) => {
         const privateSnapshot = await transaction.get(userRef);
 
         if (!privateSnapshot.exists) {
@@ -347,14 +348,17 @@ function requireAuthenticatedUid(uid: string | undefined): string {
   return uid;
 }
 
-export const healthCheck = onCall(callableOptions, (request) => {
-  const uid = requireAuthenticatedUid(request.auth?.uid);
-  return { status: "ok", uid };
-});
+export const healthCheck = onCall(
+  callableOptions,
+  (request: CallableRequest<unknown>) => {
+    const uid = requireAuthenticatedUid(request.auth?.uid);
+    return { status: "ok", uid };
+  },
+);
 
 export const completeCreditSession = onCall(
   callableOptions,
-  async (request) => {
+  async (request: CallableRequest<unknown>) => {
     const uid = requireAuthenticatedUid(request.auth?.uid);
     const data: unknown = request.data;
 
@@ -373,7 +377,7 @@ export const completeCreditSession = onCall(
     const sessionId = data.sessionId;
     const sessionRef = firestore.collection("sessions").doc(sessionId);
 
-    return firestore.runTransaction(async (transaction) => {
+    return firestore.runTransaction(async (transaction: Transaction) => {
       const sessionSnapshot = await transaction.get(sessionRef);
       if (!sessionSnapshot.exists) {
         throw new HttpsError("not-found", "Session not found.");
@@ -459,7 +463,7 @@ export const completeCreditSession = onCall(
         !Array.isArray(completedBy) ||
         completedBy.length > participants.length ||
         completedBy.some(
-          (participant) =>
+          (participant: unknown) =>
             typeof participant !== "string" ||
             !participants.includes(participant)
         ) ||
@@ -474,7 +478,7 @@ export const completeCreditSession = onCall(
       const confirmedBy = completedBy.includes(uid)
         ? completedBy
         : [...completedBy, uid];
-      const bothConfirmed = participants.every((participant) =>
+      const bothConfirmed = participants.every((participant: string) =>
         confirmedBy.includes(participant)
       );
 
@@ -584,7 +588,7 @@ export const completeCreditSession = onCall(
 
 export const generateAttendanceQr = onCall(
   callableOptions,
-  async (request) => {
+  async (request: CallableRequest<unknown>) => {
     const uid = requireAuthenticatedUid(request.auth?.uid);
     const data: unknown = request.data;
 
@@ -616,7 +620,7 @@ export const generateAttendanceQr = onCall(
     const qrRef = firestore.collection("attendanceQr").doc(sessionId);
 
     const { token, expiresAt } = await firestore.runTransaction(
-      async (transaction) => {
+      async (transaction: Transaction) => {
         const sessionSnapshot = await transaction.get(sessionRef);
         if (!sessionSnapshot.exists) {
           throw new HttpsError("not-found", "Session not found.");
@@ -663,7 +667,7 @@ export const generateAttendanceQr = onCall(
 
 export const verifyAttendanceQr = onCall(
   callableOptions,
-  async (request) => {
+  async (request: CallableRequest<unknown>) => {
     const learnerId = requireAuthenticatedUid(request.auth?.uid);
     const data: unknown = request.data;
 
@@ -696,7 +700,7 @@ export const verifyAttendanceQr = onCall(
       .collection("attendance")
       .doc(attendanceId);
 
-    return firestore.runTransaction(async (transaction) => {
+    return firestore.runTransaction(async (transaction: Transaction) => {
       const sessionSnapshot = await transaction.get(sessionRef);
       if (!sessionSnapshot.exists) {
         throw new HttpsError("not-found", "Session not found.");

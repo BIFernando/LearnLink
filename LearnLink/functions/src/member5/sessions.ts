@@ -1,5 +1,12 @@
-import { Timestamp } from "firebase-admin/firestore";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import {
+  Timestamp,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
+import {
+  onDocumentUpdated,
+  type Change,
+  type FirestoreEvent,
+} from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { checkBadges } from "./badges";
@@ -19,7 +26,12 @@ import { XP_PER_SESSION } from "./xpRules";
  */
 export const onSessionCompleted = onDocumentUpdated(
   { document: "sessions/{sessionId}", region: REGION },
-  async (event) => {
+  async (
+    event: FirestoreEvent<
+      Change<QueryDocumentSnapshot> | undefined,
+      { sessionId: string }
+    >,
+  ) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after) return;

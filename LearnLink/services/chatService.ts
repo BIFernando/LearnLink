@@ -12,8 +12,12 @@ import {
   getDocs,
   setDoc,
   writeBatch,
+  increment,
+  updateDoc,
 } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
 import { db } from '@/config/firebase';
+import { notifyNewMessage } from '@/services/member5/notificationService';
 import type { ExchangeRequest, Session } from '@/types/member4/member4';
 import { Conversation, Message } from '@/types/chat.types';
 
@@ -76,20 +80,46 @@ export const subscribeToMessages = (
 
 // ============================================
 // 3. SEND MESSAGE
-// lastMessage, lastMessageAt and unreadCounts are updated by the
-// onMessageCreated Cloud Function.
+// Spark plan: the sender's app also updates the conversation preview, bumps the
+// recipient's unread count and creates the NEW_MESSAGE notification. On Blaze the
+// onMessageCreated Cloud Function skips the preview update when the app already
+// did it, and writes the notification create-once with the same id.
 // ============================================
+const PREVIEW_MAX_LENGTH = 200;
+
 export const sendMessage = async (conversationId: string, senderId: string, text: string) => {
+  let messageId: string;
   try {
-    await addDoc(collection(db, messagesPath(conversationId)), {
+    const messageRef = await addDoc(collection(db, messagesPath(conversationId)), {
       senderId,
       text,
       createdAt: serverTimestamp(),
       isRead: false
     });
+    messageId = messageRef.id;
   } catch (error) {
     console.error('Error sending message:', error);
     throw error;
+  }
+
+  // The message is sent; preview and notification failures are only logged.
+  try {
+    const conversation = await getDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId));
+    const participantIds = (conversation.get('participantIds') as string[] | undefined) ?? [];
+    const recipientId = participantIds.find((id) => id !== senderId);
+    if (!recipientId) return;
+
+    await Promise.all([
+      updateDoc(conversation.ref, {
+        lastMessage:
+          text.length > PREVIEW_MAX_LENGTH ? `${text.slice(0, PREVIEW_MAX_LENGTH - 1)}…` : text,
+        lastMessageAt: serverTimestamp(),
+        [`unreadCounts.${recipientId}`]: increment(1),
+      }).catch((error) => console.warn('Could not update conversation preview:', error)),
+      notifyNewMessage({ conversationId, messageId, senderId, recipientId, text }),
+    ]);
+  } catch (error) {
+    console.warn('Could not update conversation after sending:', error);
   }
 };
 
@@ -114,6 +144,38 @@ export const markConversationAsRead = async (conversationId: string, userId: str
     console.error('Error marking conversation as read:', error);
     throw error;
   }
+};
+
+/** Resets my unread count for a conversation (when I open it). Never throws. */
+export const resetUnreadCount = async (conversationId: string, userId: string) => {
+  try {
+    await updateDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId), {
+      [`unreadCounts.${userId}`]: 0
+    });
+  } catch (error) {
+    console.warn('Could not reset unread count:', error);
+  }
+};
+
+/** Live total of my unread chat messages, for the Chat badges. */
+export const useUnreadChatCount = (userId: string | undefined): number => {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    setCount(0);
+    if (!userId) return;
+    return onSnapshot(
+      query(collection(db, CONVERSATIONS_COLLECTION), where('participantIds', 'array-contains', userId)),
+      (snapshot) =>
+        setCount(
+          snapshot.docs.reduce((total, conversationDoc) => {
+            const value = conversationDoc.get(`unreadCounts.${userId}`);
+            return total + (typeof value === 'number' && value > 0 ? value : 0);
+          }, 0)
+        ),
+      () => setCount(0)
+    );
+  }, [userId]);
+  return count;
 };
 
 export const markAllConversationsAsRead = async (conversations: Conversation[], userId: string) => {

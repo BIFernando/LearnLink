@@ -1,13 +1,21 @@
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApps, initializeApp } from "firebase/app";
 // Firebase 12.18.0's shared types omit this React Native runtime export.
 // @ts-expect-error React Native export is missing from Firebase's shared declarations.
-import { getReactNativePersistence, initializeAuth } from "firebase/auth";
-
-import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
-import { getStorage } from "firebase/storage";
-
+import { connectAuthEmulator, getReactNativePersistence, initializeAuth } from "firebase/auth";
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+} from "firebase/firestore";
+import {
+  connectFunctionsEmulator,
+  getFunctions,
+} from "firebase/functions";
+import {
+  connectStorageEmulator,
+  getStorage,
+} from "firebase/storage";
 
 function requireFirebaseEnv(name: string, value: string | undefined): string {
   const normalizedValue = value?.trim();
@@ -59,4 +67,19 @@ export const auth = initializeAuth(app, {
 
 export const db = getFirestore(app);
 export const functions = getFunctions(app, "asia-south1");
+export const defaultFunctions = getFunctions(app);
 export const storage = getStorage(app);
+
+if (
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === "true"
+) {
+  const emulatorHost =
+    process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST?.trim() || "127.0.0.1";
+
+  connectAuthEmulator(auth, `http://${emulatorHost}:9099`);
+  connectFirestoreEmulator(db, emulatorHost, 8080);
+  connectFunctionsEmulator(functions, emulatorHost, 5001);
+  connectFunctionsEmulator(defaultFunctions, emulatorHost, 5001);
+  connectStorageEmulator(storage, emulatorHost, 9199);
+}

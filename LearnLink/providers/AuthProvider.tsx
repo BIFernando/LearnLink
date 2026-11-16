@@ -6,9 +6,21 @@ import {
   type PropsWithChildren,
 } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  reload,
+  type User as FirebaseUser,
+} from "firebase/auth";
 
 import { auth, db } from "@/config/firebase";
+import type { StudentProfileUpdate } from "@/schemas/studentProfile";
+import {
+  saveStudentProfileToFirestore,
+  uploadAndSaveStudentProfilePhoto,
+  type StudentProfilePhotoAsset,
+  type StudentProfilePhotoProgressHandler,
+  type StudentProfilePhotoUploadResult,
+} from "@/services/studentProfileService";
 import type { StudentProfile } from "@/types/auth";
 
 interface AuthContextValue {
@@ -16,6 +28,12 @@ interface AuthContextValue {
   studentProfile: StudentProfile | null;
   isLoading: boolean;
   isEmailVerified: boolean;
+  refreshEmailVerification: () => Promise<boolean>;
+  saveStudentProfile: (profile: StudentProfileUpdate) => Promise<void>;
+  uploadStudentProfilePhoto: (
+    asset: StudentProfilePhotoAsset,
+    onProgress?: StudentProfilePhotoProgressHandler,
+  ) => Promise<StudentProfilePhotoUploadResult>;
   error: string | null;
 }
 
@@ -27,18 +45,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (__DEV__) {
+      console.log("[AuthProvider] isLoading state:", isLoading);
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     let isActive = true;
     let authChangeId = 0;
+    let hasReceivedInitialAuthCallback = false;
+
+    if (__DEV__) {
+      console.log("[AuthProvider] Waiting for initial Firebase auth callback.");
+    }
 
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
+        if (!hasReceivedInitialAuthCallback) {
+          hasReceivedInitialAuthCallback = true;
+          if (__DEV__) {
+            console.log("[AuthProvider] Initial Firebase auth callback executed.");
+            console.log(
+              "[AuthProvider] firebaseUser === null:",
+              firebaseUser === null,
+            );
+          }
+        }
+
         const currentAuthChangeId = ++authChangeId;
 
         setUser(firebaseUser);
+        setIsEmailVerified(firebaseUser?.emailVerified ?? false);
         setStudentProfile(null);
         setError(null);
         setIsLoading(Boolean(firebaseUser));
@@ -48,10 +90,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         const loadStudentProfile = async () => {
+          if (__DEV__) {
+            console.log("[AuthProvider] Firestore student profile load started.");
+          }
+
           try {
             const profileSnapshot = await getDoc(
               doc(db, "users", firebaseUser.uid),
             );
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load completed.");
+            }
 
             if (!isActive || currentAuthChangeId !== authChangeId) {
               return;
@@ -64,6 +113,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
               });
             }
           } catch (error) {
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load failed.");
+            }
+
             if (!isActive || currentAuthChangeId !== authChangeId) {
               return;
             }
@@ -92,6 +145,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         authChangeId += 1;
         console.error("Firebase authentication state listener failed.", error);
         setUser(null);
+        setIsEmailVerified(false);
         setStudentProfile(null);
         setError(error.message);
         setIsLoading(false);
@@ -104,11 +158,82 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+  async function refreshEmailVerification(): Promise<boolean> {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error("No signed-in user is available to verify.");
+    }
+
+    await reload(currentUser);
+    const emailVerified = currentUser.emailVerified;
+    setIsEmailVerified(emailVerified);
+    return emailVerified;
+  }
+
+  async function saveCurrentStudentProfile(
+    profile: StudentProfileUpdate,
+  ): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Sign in before updating your profile.");
+    }
+
+    const updatedProfile = await saveStudentProfileToFirestore(profile);
+
+    if (auth.currentUser?.uid !== currentUser.uid) {
+      return;
+    }
+
+    setStudentProfile((currentProfile) =>
+      currentProfile?.userId === currentUser.uid
+        ? { ...currentProfile, ...updatedProfile }
+        : { userId: currentUser.uid, ...updatedProfile },
+    );
+  }
+
+  async function uploadCurrentStudentProfilePhoto(
+    asset: StudentProfilePhotoAsset,
+    onProgress?: StudentProfilePhotoProgressHandler,
+  ): Promise<StudentProfilePhotoUploadResult> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Sign in before updating your profile picture.");
+    }
+
+    const currentProfile =
+      studentProfile?.userId === currentUser.uid ? studentProfile : null;
+    if (!currentProfile) {
+      throw new Error("Your student profile is not available.");
+    }
+
+    const result = await uploadAndSaveStudentProfilePhoto(
+      asset,
+      typeof currentProfile.profilePhotoUrl === "string"
+        ? currentProfile.profilePhotoUrl
+        : undefined,
+      onProgress,
+    );
+
+    if (auth.currentUser?.uid === currentUser.uid) {
+      setStudentProfile((profile) =>
+        profile?.userId === currentUser.uid
+          ? { ...profile, profilePhotoUrl: result.profilePhotoUrl }
+          : profile,
+      );
+    }
+
+    return result;
+  }
+
   const value: AuthContextValue = {
     user,
     studentProfile,
     isLoading,
-    isEmailVerified: user?.emailVerified ?? false,
+    isEmailVerified,
+    refreshEmailVerification,
+    saveStudentProfile: saveCurrentStudentProfile,
+    uploadStudentProfilePhoto: uploadCurrentStudentProfilePhoto,
     error,
   };
 

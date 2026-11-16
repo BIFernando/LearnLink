@@ -3,6 +3,7 @@ import {
   Stack,
   usePathname,
   useRouter,
+  useSegments,
   type Href,
 } from "expo-router";
 import { useState } from "react";
@@ -118,10 +119,13 @@ function isPrimaryRoute(pathname: string): boolean {
 
 export function LearnLinkNavigation() {
   const pathname = usePathname();
+  const segments = useSegments();
   const router = useRouter();
   const { user, studentProfile } = useAuth();
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const showChrome = !pathname.startsWith("/admin") && pathname !== "/modal";
+  const isAuthRoute = segments[0] === "(auth)";
+  const showChrome =
+    !isAuthRoute && !pathname.startsWith("/admin") && pathname !== "/modal";
   const activeDestination = getActiveDestination(pathname);
   const showBackButton =
     showChrome && !isPrimaryRoute(pathname) && router.canGoBack();

@@ -18,6 +18,7 @@ import {
   registerStudent,
   StudentRegistrationError,
 } from "../../services/authService";
+import { useAuth } from "@/providers/AuthProvider";
 
 type RegistrationField =
   | "fullName"
@@ -57,6 +58,7 @@ function Field({ label, helper, error, children }: FieldProps) {
 
 export default function StudentRegistrationScreen() {
   const router = useRouter();
+  const { refreshStudentProfile } = useAuth();
   const [form, setForm] = useState<RegistrationForm>({
     fullName: "",
     email: "",
@@ -120,6 +122,7 @@ export default function StudentRegistrationScreen() {
 
     try {
       const result = await registerStudent(validation.data);
+      await refreshStudentProfile();
       setIsRegistrationComplete(true);
       router.replace({
         pathname: "/(auth)/verify-email",
@@ -127,6 +130,10 @@ export default function StudentRegistrationScreen() {
       });
     } catch (error) {
       if (error instanceof StudentRegistrationError) {
+        if (error.stage === "email_verification") {
+          await refreshStudentProfile();
+        }
+
         setFormError(
           error.userId
             ? `${error.message} User ID: ${error.userId}.`

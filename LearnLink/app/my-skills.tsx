@@ -21,10 +21,19 @@ import {
   ErrorState,
   LoadingState,
 } from "@/components/member5/ui";
+import { StudentRouteGuard } from "@/components/auth/StudentRouteGuard";
 import { m5Colors } from "@/constants/member5Theme";
 import { deleteUserSkill, getMySkills } from "@/services/member2/skillService";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SkillType, StudentSkill } from "@/types/member2/skills";
+
+export default function MySkillsRoute() {
+  return (
+    <StudentRouteGuard>
+      <MySkillsScreen />
+    </StudentRouteGuard>
+  );
+}
 
 const skillTypeLabels: Record<SkillType, string> = {
   OFFER: "Skills I offer",

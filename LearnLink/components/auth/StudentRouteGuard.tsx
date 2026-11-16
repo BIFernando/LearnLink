@@ -10,6 +10,7 @@ import { getIdTokenResult } from "firebase/auth";
 import { Redirect } from "expo-router";
 
 import { useAuth } from "@/providers/AuthProvider";
+import { signOutStudent } from "@/services/authService";
 
 type AdminClaimState = "checking" | "admin" | "student" | "error";
 
@@ -18,6 +19,29 @@ interface AdminClaimCheck {
   state: AdminClaimState;
 }
 
+interface StudentProfileRecoveryStateProps {
+  title: string;
+  message: string;
+  signOutError: string | null;
+  isSigningOut: boolean;
+  onRetry: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}
+
+export function StudentRouteGuard({ children }: PropsWithChildren) {
+  const {
+    isLoading,
+    user,
+    studentProfile,
+    isEmailVerified,
+    error,
+    refreshStudentProfile,
+  } = useAuth();
+  const [adminClaimCheck, setAdminClaimCheck] =
+    useState<AdminClaimCheck | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 export function StudentRouteGuard({ children }: PropsWithChildren) {
   const { isLoading, user, isEmailVerified } = useAuth();
   const [adminClaimCheck, setAdminClaimCheck] =
@@ -88,6 +112,31 @@ export function StudentRouteGuard({ children }: PropsWithChildren) {
     );
   }
 
+  async function handleRetryProfile() {
+    setSignOutError(null);
+    await refreshStudentProfile();
+  }
+
+  async function handleSignOut() {
+    if (isSigningOut) {
+      return;
+    }
+
+    setIsSigningOut(true);
+    setSignOutError(null);
+    try {
+      await signOutStudent();
+    } catch (signOutFailure) {
+      setSignOutError(
+        signOutFailure instanceof Error
+          ? signOutFailure.message
+          : "Could not sign out. Please try again.",
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
   if (adminClaimCheck.state === "admin") {
     return <Redirect href="/admin" />;
   }
@@ -95,6 +144,76 @@ export function StudentRouteGuard({ children }: PropsWithChildren) {
   if (!isEmailVerified) {
     return <Redirect href="/(auth)/verify-email" />;
   }
+
+  if (error) {
+    return (
+      <StudentProfileRecoveryState
+        title="Student profile unavailable"
+        message={`Your student profile could not be loaded. ${error}`}
+        signOutError={signOutError}
+        isSigningOut={isSigningOut}
+        onRetry={handleRetryProfile}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  if (!studentProfile) {
+    return (
+      <StudentProfileRecoveryState
+        title="Student profile not found"
+        message="We could not find a student profile for this account. Retry to check again, or sign out and contact support. No replacement profile will be created automatically."
+        signOutError={signOutError}
+        isSigningOut={isSigningOut}
+        onRetry={handleRetryProfile}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  return children;
+}
+
+function StudentProfileRecoveryState({
+  title,
+  message,
+  signOutError,
+  isSigningOut,
+  onRetry,
+  onSignOut,
+}: StudentProfileRecoveryStateProps) {
+  return (
+    <View style={styles.stateContainer}>
+      <Text style={styles.title}>{title}</Text>
+      <Text accessibilityRole="alert" style={styles.error}>
+        {message}
+      </Text>
+      {signOutError ? (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {signOutError}
+        </Text>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        disabled={isSigningOut}
+        onPress={() => void onRetry()}
+        style={styles.button}
+      >
+        <Text style={styles.buttonText}>Retry</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        disabled={isSigningOut}
+        onPress={() => void onSignOut()}
+        style={styles.secondaryButton}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {isSigningOut ? "Signing out..." : "Sign Out"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
   return children;
 }
@@ -122,6 +241,13 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     textAlign: "center",
   },
+  title: {
+    color: "#17243A",
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 10,
+    textAlign: "center",
+  },
   button: {
     alignItems: "center",
     backgroundColor: "#3159A5",
@@ -129,6 +255,22 @@ const styles = StyleSheet.create({
     minWidth: 120,
     paddingHorizontal: 20,
     paddingVertical: 12,
+  },
+  secondaryButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 10,
+    minWidth: 120,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    color: "#3159A5",
+    fontSize: 15,
+    fontWeight: "700",
   },
   buttonText: {
     color: "#FFFFFF",

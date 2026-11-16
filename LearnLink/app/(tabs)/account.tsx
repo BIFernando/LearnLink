@@ -32,7 +32,7 @@ export default function AccountScreen() {
   const visibilityRequestInProgress = useRef(false);
   const visibilityLoadId = useRef(0);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isDiscoverable, setIsDiscoverable] = useState<boolean | null>(null);
   const [isVisibilityLoading, setIsVisibilityLoading] = useState(true);
   const [isVisibilityUpdating, setIsVisibilityUpdating] = useState(false);
@@ -167,21 +167,26 @@ export default function AccountScreen() {
     }
   }
 
-  async function handleLogout() {
-    if (logoutInProgress.current) {
+  async function handleSignOut() {
+    if (isSigningOut || logoutInProgress.current) {
       return;
     }
 
     logoutInProgress.current = true;
     setIsSigningOut(true);
-    setLogoutError(null);
+    setSignOutError(null);
 
     try {
       await signOutStudent();
       router.replace('/(auth)/login');
-    } catch (logoutError) {
-      console.error('Failed to sign out student:', logoutError);
-      setLogoutError('Could not sign out. Please try again.');
+    } catch (error) {
+      console.error('Failed to sign out student:', error);
+      setSignOutError(
+        error instanceof Error
+          ? error.message
+          : 'Sign out failed. Please try again.',
+      );
+    } finally {
       logoutInProgress.current = false;
       setIsSigningOut(false);
     }
@@ -321,28 +326,26 @@ export default function AccountScreen() {
           ) : null}
         </View>
 
+        {signOutError ? (
+          <ThemedText accessibilityRole="alert" style={styles.signOutError}>
+            {signOutError}
+          </ThemedText>
+        ) : null}
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: isSigningOut }}
           disabled={isSigningOut}
-          onPress={handleLogout}
+          onPress={handleSignOut}
           style={({ pressed }) => [
-            styles.logoutButton,
-            (pressed || isSigningOut) && styles.buttonMuted,
+            styles.signOutButton,
+            pressed && styles.buttonMuted,
           ]}
         >
           {isSigningOut ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <ThemedText style={styles.logoutText}>Log Out</ThemedText>
+            <ThemedText style={styles.signOutButtonText}>Sign Out</ThemedText>
           )}
         </Pressable>
-
-        {logoutError ? (
-          <ThemedText accessibilityRole="alert" style={styles.error}>
-            {logoutError}
-          </ThemedText>
-        ) : null}
       </ScrollView>
     </ThemedView>
   );
@@ -460,21 +463,27 @@ const styles = StyleSheet.create({
     color: '#3159A5',
     fontWeight: '700',
   },
-  logoutButton: {
+  signOutButton: {
+    alignSelf: 'stretch',
     alignItems: 'center',
     backgroundColor: '#B42318',
     borderRadius: 10,
-    minHeight: 48,
     justifyContent: 'center',
+    minHeight: 50,
     paddingHorizontal: 20,
   },
   buttonMuted: {
     opacity: 0.7,
   },
-  logoutText: {
+  signOutButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  signOutError: {
+    color: '#B42318',
+    fontSize: 14,
+    marginBottom: 12,
   },
   success: {
     color: '#15803D',

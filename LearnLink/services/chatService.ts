@@ -15,6 +15,7 @@ import {
   increment,
   updateDoc,
 } from 'firebase/firestore';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useEffect, useState } from 'react';
 import { db } from '@/config/firebase';
 import { notifyNewMessage } from '@/services/member5/notificationService';
@@ -23,9 +24,47 @@ import { Conversation, Message } from '@/types/chat.types';
 
 const CONVERSATIONS_COLLECTION = 'conversations';
 export const MESSAGES_PAGE_SIZE = 30;
+const MAX_CHAT_IMAGE_DATA_URI_LENGTH = 700_000;
+const CHAT_IMAGE_DATA_URI_PREFIX = 'data:image/jpeg;base64,';
 
 const messagesPath = (conversationId: string) =>
   `${CONVERSATIONS_COLLECTION}/${conversationId}/messages`;
+
+const compressChatImage = async (uri: string): Promise<string> => {
+  const saveOptions = {
+    base64: true,
+    compress: 0.5,
+    format: ImageManipulator.SaveFormat.JPEG,
+  };
+  let result = await ImageManipulator.manipulateAsync(uri, [], saveOptions);
+  if (!result.base64) {
+    throw new Error('Could not prepare the selected photo. Please try another image.');
+  }
+
+  const maxDimension = Math.max(result.width, result.height);
+  for (const targetDimension of [1280, 1024, 768, 512, 384]) {
+    if (result.base64.length + CHAT_IMAGE_DATA_URI_PREFIX.length <= MAX_CHAT_IMAGE_DATA_URI_LENGTH) {
+      return `${CHAT_IMAGE_DATA_URI_PREFIX}${result.base64}`;
+    }
+
+    if (maxDimension <= targetDimension) continue;
+
+    const resize =
+      result.width >= result.height
+        ? { width: targetDimension }
+        : { height: targetDimension };
+    result = await ImageManipulator.manipulateAsync(uri, [{ resize }], saveOptions);
+    if (!result.base64) {
+      throw new Error('Could not compress the selected photo. Please try another image.');
+    }
+  }
+
+  if (result.base64.length + CHAT_IMAGE_DATA_URI_PREFIX.length > MAX_CHAT_IMAGE_DATA_URI_LENGTH) {
+    throw new Error('This photo is too large to send. Choose a smaller image and try again.');
+  }
+
+  return `${CHAT_IMAGE_DATA_URI_PREFIX}${result.base64}`;
+};
 
 // ============================================
 // 1. SUBSCRIBE TO CONVERSATIONS
@@ -86,21 +125,38 @@ export const subscribeToMessages = (
 // did it, and writes the notification create-once with the same id.
 // ============================================
 const PREVIEW_MAX_LENGTH = 200;
+// Same preview as the onMessageCreated Cloud Function uses for photo-only messages.
+const PHOTO_PREVIEW = '📷 Photo';
 
-export const sendMessage = async (conversationId: string, senderId: string, text: string) => {
+export const sendMessage = async (
+  conversationId: string,
+  senderId: string,
+  text: string,
+  image?: { uri: string; mimeType?: string },
+) => {
+  const trimmedText = text.trim();
   let messageId: string;
   try {
+    if (!trimmedText && !image) {
+      throw new Error('Add a message or photo before sending.');
+    }
+
+    const imageBase64 = image ? await compressChatImage(image.uri) : undefined;
+
     const messageRef = await addDoc(collection(db, messagesPath(conversationId)), {
       senderId,
-      text,
+      text: trimmedText,
+      ...(imageBase64 ? { imageBase64 } : {}),
       createdAt: serverTimestamp(),
-      isRead: false
+      isRead: false,
     });
     messageId = messageRef.id;
   } catch (error) {
     console.error('Error sending message:', error);
     throw error;
   }
+
+  const previewText = trimmedText || PHOTO_PREVIEW;
 
   // The message is sent; preview and notification failures are only logged.
   try {
@@ -112,11 +168,13 @@ export const sendMessage = async (conversationId: string, senderId: string, text
     await Promise.all([
       updateDoc(conversation.ref, {
         lastMessage:
-          text.length > PREVIEW_MAX_LENGTH ? `${text.slice(0, PREVIEW_MAX_LENGTH - 1)}…` : text,
+          previewText.length > PREVIEW_MAX_LENGTH
+            ? `${previewText.slice(0, PREVIEW_MAX_LENGTH - 1)}…`
+            : previewText,
         lastMessageAt: serverTimestamp(),
         [`unreadCounts.${recipientId}`]: increment(1),
       }).catch((error) => console.warn('Could not update conversation preview:', error)),
-      notifyNewMessage({ conversationId, messageId, senderId, recipientId, text }),
+      notifyNewMessage({ conversationId, messageId, senderId, recipientId, text: previewText }),
     ]);
   } catch (error) {
     console.warn('Could not update conversation after sending:', error);

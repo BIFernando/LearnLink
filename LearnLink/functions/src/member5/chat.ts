@@ -39,6 +39,11 @@ export const onMessageCreated = onDocumentCreated(
     const { conversationId, messageId } = event.params;
     const senderId = typeof message.senderId === "string" ? message.senderId : "";
     const text = typeof message.text === "string" ? message.text : "";
+    const previewText =
+      text.trim() ||
+      (typeof message.imageBase64 === "string" || typeof message.imageUrl === "string"
+        ? "📷 Photo"
+        : "");
 
     const conversationRef = db().collection(COLLECTIONS.conversations).doc(conversationId);
     const conversation = await conversationRef.get();
@@ -56,7 +61,7 @@ export const onMessageCreated = onDocumentCreated(
 
     if (!alreadyUpdated) {
       const update: Record<string, unknown> = {
-        lastMessage: truncate(text, 200),
+        lastMessage: truncate(previewText, 200),
         lastMessageAt: createdAt ?? FieldValue.serverTimestamp(),
       };
       recipients.forEach((id) => {
@@ -73,7 +78,7 @@ export const onMessageCreated = onDocumentCreated(
             userId: recipientId,
             type: "NEW_MESSAGE",
             title: truncate(senderName, 100),
-            body: truncate(text, 140),
+            body: truncate(previewText, 140),
             referenceId: conversationId,
           },
           notificationDocId("NEW_MESSAGE", `${conversationId}_${messageId}`, recipientId),

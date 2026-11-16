@@ -1,5 +1,11 @@
 import { Stack } from "expo-router";
 
+import { StudentRouteGuard } from "@/components/auth/StudentRouteGuard";
+
 export default function ReportsLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <StudentRouteGuard>
+      <Stack screenOptions={{ headerShown: false }} />
+    </StudentRouteGuard>
+  );
 }

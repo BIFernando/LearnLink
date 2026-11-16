@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc } from "firebase/firestore";
 import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -15,11 +14,10 @@ import {
   LoadingState,
   StarRating,
 } from "@/components/member5/ui";
-import { db } from "@/config/firebase";
 import { m5Colors as colors } from "@/constants/member5Theme";
 import { XP_PER_REVIEW } from "@/functions/src/member5/xpRules";
 import { useAuth } from "@/providers/AuthProvider";
-import { sessionDate } from "@/services/chatService";
+import { getSkillName, sessionDate } from "@/services/chatService";
 import { errorMessage } from "@/services/member5/format";
 import {
   RATING_LABELS,
@@ -65,14 +63,13 @@ export default function GiveReviewScreen() {
       const result = await getReviewableSession(sessionId, userId);
       setSession(result.session);
       setRevieweeId(result.revieweeId);
-      const [profile, existing, skill] = await Promise.all([
+      const [profile, existing, skillName] = await Promise.all([
         getUserProfile(result.revieweeId).catch(() => null),
         getMyReview(sessionId, userId),
-        getDoc(doc(db, "skills", result.session.skillId)).catch(() => null),
+        getSkillName(result.session.skillId),
       ]);
       setReviewee(profile);
-      const name = skill?.get("name");
-      setSkillName(typeof name === "string" ? name : null);
+      setSkillName(skillName);
       setStatus(existing ? "alreadyReviewed" : "ready");
     } catch (err) {
       setMessage(errorMessage(err, "Could not load this session."));

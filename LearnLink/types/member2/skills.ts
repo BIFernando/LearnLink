@@ -32,6 +32,7 @@ export interface StudentSkill {
   userId: string;
   skillId: string;
   skillName: string;
+  isCustom?: boolean;
   categoryId?: string;
   type: SkillType;
   proficiencyLevel: SkillLevel;
@@ -57,8 +58,7 @@ export interface StudentDirectoryProfile {
   skills: StudentSkill[];
 }
 
-export interface UserSkillInput {
-  skillId: string;
+interface UserSkillDetails {
   type: SkillType;
   proficiencyLevel: SkillLevel;
   description: string;
@@ -66,6 +66,12 @@ export interface UserSkillInput {
   sessionModes: SessionMode[];
   availability: string;
 }
+
+export type UserSkillInput = UserSkillDetails &
+  (
+    | { source: "catalog"; skillId: string }
+    | { source: "custom"; skillName: string }
+  );
 
 export interface SkillSuggestionInput {
   name: string;

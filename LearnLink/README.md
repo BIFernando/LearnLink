@@ -167,6 +167,12 @@ client-side checks are best-effort and can race with concurrent writes; they
 prevent ordinary accidental deletion but do not replace backend/rules
 enforcement.
 
+Students may also add a custom skill directly to their own portfolio. These
+records are stored in `userSkills` with `isCustom: true` and a `skillName`;
+they do not create or modify a shared `skills` catalog record. Their `skillId`
+uses a normalized, encoded `custom_` identifier so students using the same
+custom skill name can match in discovery.
+
 The currently checked-in Firestore rules already allow admins to write
 `skills` and `categories`; no rules were changed for this module. Those rules
 do not enforce catalog-reference existence on member writes, and member

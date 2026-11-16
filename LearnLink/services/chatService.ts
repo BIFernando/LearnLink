@@ -13,15 +13,54 @@ import {
   setDoc,
   writeBatch,
 } from 'firebase/firestore';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { db } from '@/config/firebase';
 import type { ExchangeRequest, Session } from '@/types/member4/member4';
 import { Conversation, Message } from '@/types/chat.types';
 
 const CONVERSATIONS_COLLECTION = 'conversations';
 export const MESSAGES_PAGE_SIZE = 30;
+const MAX_CHAT_IMAGE_DATA_URI_LENGTH = 700_000;
+const CHAT_IMAGE_DATA_URI_PREFIX = 'data:image/jpeg;base64,';
 
 const messagesPath = (conversationId: string) =>
   `${CONVERSATIONS_COLLECTION}/${conversationId}/messages`;
+
+const compressChatImage = async (uri: string): Promise<string> => {
+  const saveOptions = {
+    base64: true,
+    compress: 0.5,
+    format: ImageManipulator.SaveFormat.JPEG,
+  };
+  let result = await ImageManipulator.manipulateAsync(uri, [], saveOptions);
+  if (!result.base64) {
+    throw new Error('Could not prepare the selected photo. Please try another image.');
+  }
+
+  const maxDimension = Math.max(result.width, result.height);
+  for (const targetDimension of [1280, 1024, 768, 512, 384]) {
+    if (result.base64.length + CHAT_IMAGE_DATA_URI_PREFIX.length <= MAX_CHAT_IMAGE_DATA_URI_LENGTH) {
+      return `${CHAT_IMAGE_DATA_URI_PREFIX}${result.base64}`;
+    }
+
+    if (maxDimension <= targetDimension) continue;
+
+    const resize =
+      result.width >= result.height
+        ? { width: targetDimension }
+        : { height: targetDimension };
+    result = await ImageManipulator.manipulateAsync(uri, [{ resize }], saveOptions);
+    if (!result.base64) {
+      throw new Error('Could not compress the selected photo. Please try another image.');
+    }
+  }
+
+  if (result.base64.length + CHAT_IMAGE_DATA_URI_PREFIX.length > MAX_CHAT_IMAGE_DATA_URI_LENGTH) {
+    throw new Error('This photo is too large to send. Choose a smaller image and try again.');
+  }
+
+  return `${CHAT_IMAGE_DATA_URI_PREFIX}${result.base64}`;
+};
 
 // ============================================
 // 1. SUBSCRIBE TO CONVERSATIONS
@@ -79,13 +118,26 @@ export const subscribeToMessages = (
 // lastMessage, lastMessageAt and unreadCounts are updated by the
 // onMessageCreated Cloud Function.
 // ============================================
-export const sendMessage = async (conversationId: string, senderId: string, text: string) => {
+export const sendMessage = async (
+  conversationId: string,
+  senderId: string,
+  text: string,
+  image?: { uri: string; mimeType?: string },
+) => {
   try {
+    const trimmedText = text.trim();
+    if (!trimmedText && !image) {
+      throw new Error('Add a message or photo before sending.');
+    }
+
+    const imageBase64 = image ? await compressChatImage(image.uri) : undefined;
+
     await addDoc(collection(db, messagesPath(conversationId)), {
       senderId,
-      text,
+      text: trimmedText,
+      ...(imageBase64 ? { imageBase64 } : {}),
       createdAt: serverTimestamp(),
-      isRead: false
+      isRead: false,
     });
   } catch (error) {
     console.error('Error sending message:', error);
@@ -179,9 +231,19 @@ export const getSkillName = (skillId: string): Promise<string | null> => {
   const cached = skillNameCache.get(skillId);
   if (cached) return cached;
   const request = getDoc(doc(db, 'skills', skillId))
-    .then((snapshot) => {
+    .then(async (snapshot) => {
       const name = snapshot.get('name');
-      return typeof name === 'string' ? name : null;
+      if (typeof name === 'string') return name;
+
+      const userSkillSnapshot = await getDocs(
+        query(
+          collection(db, 'userSkills'),
+          where('skillId', '==', skillId),
+          limit(1)
+        )
+      );
+      const personalSkillName = userSkillSnapshot.docs[0]?.get('skillName');
+      return typeof personalSkillName === 'string' ? personalSkillName : null;
     })
     .catch(() => null);
   skillNameCache.set(skillId, request);

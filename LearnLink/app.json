@@ -31,15 +31,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow LearnLink to access your photos to set a profile picture.",
-          "cameraPermission": false,
+          "photosPermission": "Allow LearnLink to access your photos so you can share images in chat or set a profile picture.",
+          "cameraPermission": "Allow LearnLink to use your camera to take photos to share in chat.",
           "microphonePermission": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow LearnLink to use your camera to scan attendance QR codes.",
+          "cameraPermission": "Allow LearnLink to use your camera to take photos to share in chat and scan attendance QR codes.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

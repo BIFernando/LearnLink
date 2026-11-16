@@ -38,7 +38,10 @@ import {
   type SkillLevel,
   type SkillType,
   type StudentSkill,
+  type UserSkillInput,
 } from "@/types/member2/skills";
+
+type SkillSource = "CATALOG" | "CUSTOM";
 
 const levelLabels: Record<SkillLevel, string> = {
   BEGINNER: "Beginner",
@@ -53,7 +56,9 @@ export default function SkillFormScreen() {
   const [catalog, setCatalog] = useState<SkillCatalogItem[]>([]);
   const [categories, setCategories] = useState<SkillCategory[]>([]);
   const [skill, setSkill] = useState<StudentSkill | null>(null);
+  const [skillSource, setSkillSource] = useState<SkillSource>("CATALOG");
   const [selectedSkillId, setSelectedSkillId] = useState("");
+  const [customSkillName, setCustomSkillName] = useState("");
   const [type, setType] = useState<SkillType>("OFFER");
   const [level, setLevel] = useState<SkillLevel>("BEGINNER");
   const [description, setDescription] = useState("");
@@ -88,7 +93,9 @@ export default function SkillFormScreen() {
           throw new Error("This skill is not in your portfolio or no longer exists.");
         }
         setSkill(existingSkill);
+        setSkillSource(existingSkill.isCustom ? "CUSTOM" : "CATALOG");
         setSelectedSkillId(existingSkill.skillId);
+        setCustomSkillName(existingSkill.isCustom ? existingSkill.skillName : "");
         setType(existingSkill.type);
         setLevel(existingSkill.proficiencyLevel);
         setDescription(existingSkill.description ?? "");
@@ -122,7 +129,10 @@ export default function SkillFormScreen() {
     );
   }, [catalog, skillSearch]);
 
-  const selectedSkill = catalog.find((item) => item.id === selectedSkillId);
+  const selectedSkill =
+    skillSource === "CATALOG"
+      ? catalog.find((item) => item.id === selectedSkillId)
+      : undefined;
 
   function toggleSessionMode(mode: SessionMode) {
     setSessionModes((current) =>
@@ -134,8 +144,16 @@ export default function SkillFormScreen() {
 
   async function handleSave() {
     const years = Number(yearsExperience);
-    if (!selectedSkillId) {
+    if (skillSource === "CATALOG" && !selectedSkillId) {
       setError("Choose a skill from the catalog before saving.");
+      return;
+    }
+    if (skillSource === "CUSTOM" && !customSkillName.trim()) {
+      setError("Enter the name of your custom skill.");
+      return;
+    }
+    if (skillSource === "CUSTOM" && customSkillName.trim().length > 100) {
+      setError("Custom skill names must be 100 characters or fewer.");
       return;
     }
     if (!Number.isInteger(years) || years < 0 || years > 50) {
@@ -150,18 +168,27 @@ export default function SkillFormScreen() {
     setIsSaving(true);
     setError(null);
     try {
-      await saveUserSkill(
-        {
-          skillId: selectedSkillId,
-          type,
-          proficiencyLevel: level,
-          description,
-          yearsExperience: years,
-          sessionModes,
-          availability,
-        },
-        skill?.id,
-      );
+      const commonFields = {
+        type,
+        proficiencyLevel: level,
+        description,
+        yearsExperience: years,
+        sessionModes,
+        availability,
+      };
+      const input: UserSkillInput =
+        skillSource === "CUSTOM"
+          ? {
+              ...commonFields,
+              source: "custom",
+              skillName: customSkillName,
+            }
+          : {
+              ...commonFields,
+              source: "catalog",
+              skillId: selectedSkillId,
+            };
+      await saveUserSkill(input, skill?.id);
       Alert.alert(
         "Saved",
         skill ? "Your skill was updated." : "Your skill was added to the portfolio.",
@@ -257,73 +284,110 @@ export default function SkillFormScreen() {
             ))}
           </View>
 
-          <Text style={styles.label}>Choose a catalog skill</Text>
-          <TextInput
-            accessibilityLabel="Search catalog skills"
-            onChangeText={setSkillSearch}
-            placeholder="Search skills"
-            style={styles.input}
-            value={skillSearch}
-          />
-          {selectedSkill ? (
-            <View style={styles.selectedSkill}>
-              <Text style={styles.selectedSkillText}>{selectedSkill.name}</Text>
-              <Pressable
-                accessibilityLabel="Clear selected skill"
-                accessibilityRole="button"
-                onPress={() => setSelectedSkillId("")}
-              >
-                <Ionicons name="close-circle" size={20} color={m5Colors.textMuted} />
-              </Pressable>
-            </View>
-          ) : null}
-          <View style={styles.catalogList}>
-            {filteredCatalog.slice(0, 40).map((item) => (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: item.id === selectedSkillId }}
-                key={item.id}
-                onPress={() => setSelectedSkillId(item.id)}
-                style={({ pressed }) => [
-                  styles.catalogRow,
-                  item.id === selectedSkillId && styles.catalogRowSelected,
-                  pressed && styles.catalogRowPressed,
-                ]}
-              >
-                <View style={styles.catalogText}>
-                  <Text style={styles.catalogName}>{item.name}</Text>
-                  {item.description ? (
-                    <Text style={styles.catalogDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                  ) : null}
-                </View>
-                <Ionicons
-                  name={item.id === selectedSkillId ? "checkmark-circle" : "add-circle-outline"}
-                  size={21}
-                  color={item.id === selectedSkillId ? m5Colors.primary : m5Colors.textMuted}
-                />
-              </Pressable>
-            ))}
-            {filteredCatalog.length === 0 ? (
-              <Text style={styles.emptyCatalog}>No catalog skills match your search.</Text>
-            ) : null}
+          <Text style={styles.label}>How do you want to add the skill?</Text>
+          <View style={styles.choiceRow}>
+            <Chip
+              label="From catalog"
+              selected={skillSource === "CATALOG"}
+              onPress={() => {
+                if (skillSource === "CUSTOM") {
+                  setSelectedSkillId("");
+                }
+                setSkillSource("CATALOG");
+              }}
+            />
+            <Chip
+              label="My own skill"
+              selected={skillSource === "CUSTOM"}
+              onPress={() => setSkillSource("CUSTOM")}
+            />
           </View>
-          {filteredCatalog.length > 40 ? (
-            <Text style={styles.catalogHint}>
-              Showing the first 40 results. Search to narrow the list.
-            </Text>
-          ) : null}
-          <Button
-            label="Suggest a new skill"
-            icon="bulb-outline"
-            onPress={() => {
-              setSuggestionName(skillSearch.trim());
-              setSuggestionVisible(true);
-            }}
-            variant="soft"
-            style={styles.suggestButton}
-          />
+          {skillSource === "CUSTOM" ? (
+            <>
+              <Text style={styles.label}>Skill name</Text>
+              <TextInput
+                accessibilityLabel="Custom skill name"
+                maxLength={100}
+                onChangeText={setCustomSkillName}
+                placeholder="Enter a skill you have or want to learn"
+                style={styles.input}
+                value={customSkillName}
+              />
+              <Text style={styles.catalogHint}>
+                This skill will be added to your portfolio and will not change the shared catalog.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.label}>Choose a catalog skill</Text>
+              <TextInput
+                accessibilityLabel="Search catalog skills"
+                onChangeText={setSkillSearch}
+                placeholder="Search skills"
+                style={styles.input}
+                value={skillSearch}
+              />
+              {selectedSkill ? (
+                <View style={styles.selectedSkill}>
+                  <Text style={styles.selectedSkillText}>{selectedSkill.name}</Text>
+                  <Pressable
+                    accessibilityLabel="Clear selected skill"
+                    accessibilityRole="button"
+                    onPress={() => setSelectedSkillId("")}
+                  >
+                    <Ionicons name="close-circle" size={20} color={m5Colors.textMuted} />
+                  </Pressable>
+                </View>
+              ) : null}
+              <View style={styles.catalogList}>
+                {filteredCatalog.slice(0, 40).map((item) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: item.id === selectedSkillId }}
+                    key={item.id}
+                    onPress={() => setSelectedSkillId(item.id)}
+                    style={({ pressed }) => [
+                      styles.catalogRow,
+                      item.id === selectedSkillId && styles.catalogRowSelected,
+                      pressed && styles.catalogRowPressed,
+                    ]}
+                  >
+                    <View style={styles.catalogText}>
+                      <Text style={styles.catalogName}>{item.name}</Text>
+                      {item.description ? (
+                        <Text style={styles.catalogDescription} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Ionicons
+                      name={item.id === selectedSkillId ? "checkmark-circle" : "add-circle-outline"}
+                      size={21}
+                      color={item.id === selectedSkillId ? m5Colors.primary : m5Colors.textMuted}
+                    />
+                  </Pressable>
+                ))}
+                {filteredCatalog.length === 0 ? (
+                  <Text style={styles.emptyCatalog}>No catalog skills match your search.</Text>
+                ) : null}
+              </View>
+              {filteredCatalog.length > 40 ? (
+                <Text style={styles.catalogHint}>
+                  Showing the first 40 results. Search to narrow the list.
+                </Text>
+              ) : null}
+              <Button
+                label="Suggest for shared catalog"
+                icon="bulb-outline"
+                onPress={() => {
+                  setSuggestionName(skillSearch.trim());
+                  setSuggestionVisible(true);
+                }}
+                variant="soft"
+                style={styles.suggestButton}
+              />
+            </>
+          )}
 
           <Text style={styles.label}>
             {type === "OFFER" ? "Your proficiency" : "Your target level"}

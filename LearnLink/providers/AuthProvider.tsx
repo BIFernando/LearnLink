@@ -128,6 +128,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     isMounted.current = true;
+    if (__DEV__) {
+      console.log("[AuthProvider] isLoading state:", isLoading);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    let isActive = true;
     let hasReceivedInitialAuthCallback = false;
 
     if (__DEV__) {
@@ -137,6 +144,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
+
+        if (!hasReceivedInitialAuthCallback) {
+          hasReceivedInitialAuthCallback = true;
+          if (__DEV__) {
+            console.log("[AuthProvider] Initial Firebase auth callback executed.");
+            console.log(
+              "[AuthProvider] firebaseUser === null:",
+              firebaseUser === null,
+            );
+          }
+        }
+
         if (!hasReceivedInitialAuthCallback) {
           hasReceivedInitialAuthCallback = true;
           if (__DEV__) {
@@ -161,7 +180,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        void loadStudentProfile(firebaseUser, currentAuthChangeId);
+        const loadStudentProfile = async () => {
+          if (__DEV__) {
+            console.log("[AuthProvider] Firestore student profile load started.");
+          }
+
+          try {
+            const profileSnapshot = await getDoc(
+              doc(db, "users", firebaseUser.uid),
+            );
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load completed.");
+            }
+
+            if (!isActive || currentAuthChangeId !== authChangeId.current) {
+              return;
+            }
+
+            if (profileSnapshot.exists()) {
+              setStudentProfile({
+                ...profileSnapshot.data(),
+                userId: firebaseUser.uid,
+              });
+            }
+          } catch (error) {
+            if (__DEV__) {
+              console.log("[AuthProvider] Firestore student profile load failed.");
+            }
+
+            if (!isActive || currentAuthChangeId !== authChangeId.current) {
+              return;
+            }
+
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Failed to load the student profile.";
+
+            console.error("Failed to load the current student profile.", error);
+            setError(message);
+          } finally {
+            if (isActive && currentAuthChangeId === authChangeId.current) {
+              setIsLoading(false);
+            }
+          }
+        };
+
+        void loadStudentProfile();
       },
       (listenerError) => {
         if (!isMounted.current) {

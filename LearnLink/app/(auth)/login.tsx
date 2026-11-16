@@ -332,6 +332,18 @@ export default function StudentLoginScreen() {
             </Pressable>
 
             <Pressable
+              accessibilityRole="button"
+              disabled={isBusy}
+              onPress={() => router.push("/admin/login")}
+              style={({ pressed }) => [
+                styles.adminLoginButton,
+                (pressed || isBusy) && styles.buttonMuted,
+              ]}
+            >
+              <Text style={styles.adminLoginButtonText}>Login as Admin</Text>
+            </Pressable>
+
+            <Pressable
               accessibilityRole="link"
               disabled={isBusy}
               onPress={() => router.push("/(auth)/register")}
@@ -488,6 +500,21 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  adminLoginButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#3159A5",
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 50,
+  },
+  adminLoginButtonText: {
+    color: "#3159A5",
     fontSize: 16,
     fontWeight: "700",
   },

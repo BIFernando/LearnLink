@@ -410,6 +410,17 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in conversation.participantIds;
     }
 
+    function validChatImageBase64(value) {
+      return value is string
+        && value.size() <= 700000
+        && value.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$');
+    }
+
+    function validLegacyChatImageUrl(value) {
+      return value is string
+        && value.matches('^https://firebasestorage.googleapis.com/.*$');
+    }
+
     function acceptedExchangeBetween(requestId, participantIds) {
       let exchange = get(
         /databases/$(database)/documents/exchangeRequests/$(requestId)
@@ -459,11 +470,29 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isConversationParticipant(conversationData(conversationId));
         allow create: if isConversationParticipant(conversationData(conversationId))
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'isRead'])
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'text', 'imageUrl', 'imageBase64', 'createdAt', 'isRead'
+          ])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 2000
+          && (
+            request.resource.data.text.size() > 0
+            || (
+              ('imageBase64' in request.resource.data
+                && validChatImageBase64(request.resource.data.imageBase64))
+              || ('imageUrl' in request.resource.data
+                && validLegacyChatImageUrl(request.resource.data.imageUrl))
+            )
+          )
+          && (
+            !('imageBase64' in request.resource.data)
+            || validChatImageBase64(request.resource.data.imageBase64)
+          )
+          && (
+            !('imageUrl' in request.resource.data)
+            || validLegacyChatImageUrl(request.resource.data.imageUrl)
+          )
           && request.resource.data.createdAt == request.time
           && request.resource.data.isRead == false;
         // The recipient may mark a message as read; nothing else changes.

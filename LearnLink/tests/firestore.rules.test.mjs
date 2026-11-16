@@ -953,3 +953,74 @@ test("report submission and moderation callables enforce reporter and admin acce
   assert.equal(reportSnapshot.get("reviewedBy"), "admin");
   assert.equal(historySnapshot.size, 1);
 });
+
+test("chat participants can send bounded Base64 images and legacy Storage image messages", async () => {
+  await seedDocuments([
+    {
+      path: "conversations/exchange-1",
+      data: {
+        participantIds: ["alice", "bob"],
+        exchangeRequestId: "exchange-1",
+        lastMessage: "",
+        lastMessageAt: new Date(),
+        createdAt: new Date(),
+        unreadCounts: { alice: 0, bob: 0 },
+      },
+    },
+  ]);
+
+  const imageMessage = {
+    senderId: "alice",
+    text: "",
+    imageUrl:
+      "https://firebasestorage.googleapis.com/v0/b/demo-learnlink.appspot.com/o/chatImages%2Fexchange-1%2Falice%2Fphoto.jpg?alt=media&token=test",
+    createdAt: serverTimestamp(),
+    isRead: false,
+  };
+  await assertSucceeds(
+    setDoc(
+      doc(userDb("alice"), "conversations/exchange-1/messages/photo"),
+      imageMessage,
+    ),
+  );
+  const base64ImageMessage = {
+    senderId: "alice",
+    text: "",
+    imageBase64: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/",
+    createdAt: serverTimestamp(),
+    isRead: false,
+  };
+  await assertSucceeds(
+    setDoc(
+      doc(userDb("alice"), "conversations/exchange-1/messages/base64-photo"),
+      base64ImageMessage,
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(userDb("alice"), "conversations/exchange-1/messages/oversized-photo"),
+      {
+        ...base64ImageMessage,
+        imageBase64: `data:image/jpeg;base64,${"A".repeat(700_000)}`,
+      },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(userDb("alice"), "conversations/exchange-1/messages/invalid-base64-photo"),
+      { ...base64ImageMessage, imageBase64: "https://example.test/photo.jpg" },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(userDb("alice"), "conversations/exchange-1/messages/external-photo"),
+      { ...imageMessage, imageUrl: "https://example.test/photo.jpg" },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(userDb("mallory"), "conversations/exchange-1/messages/outsider-photo"),
+      { ...imageMessage, senderId: "mallory" },
+    ),
+  );
+});

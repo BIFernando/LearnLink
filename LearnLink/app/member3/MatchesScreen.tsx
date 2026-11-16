@@ -20,7 +20,7 @@ import { MatchingService } from '../../services/member3/matchingService';
 import { auth } from '../../config/firebase';
 import { useMatches } from '../../hooks/useMatches';
 import { colors } from '../../components/member3/matching-components';
-import type { IMatch, IUser } from '../../../src/types/matching.types';
+import type { IMatch, IUser } from '../../types/matching.types';
 
 const matchingService = new MatchingService();
 
@@ -108,7 +108,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
 };
 
 const MatchesScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
-  const currentUserId = auth.currentUser?.uid ?? 'demo-user-1';
+  const currentUserId = auth.currentUser?.uid;
   const { matches, loading, error, refresh } = useMatches(currentUserId);
   const [refreshing, setRefreshing] = useState(false);
 

@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +18,7 @@ import {
   View,
 } from "react-native";
 
+import { CameraModal } from "@/components/member5/CameraModal";
 import { Avatar, Chip, ErrorState, LoadingState } from "@/components/member5/ui";
 import { m5Colors as colors } from "@/constants/member5Theme";
 import { useAuth } from "@/providers/AuthProvider";
@@ -56,6 +60,12 @@ export default function ConversationScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [selectedImage, setSelectedImage] = useState<{
+    uri: string;
+    mimeType?: string;
+  } | null>(null);
+  const [imageMenuVisible, setImageMenuVisible] = useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
   const [pageCount, setPageCount] = useState(MESSAGES_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -140,18 +150,53 @@ export default function ConversationScreen() {
 
   const handleSend = async (value = text) => {
     const trimmed = value.trim();
-    if (!trimmed || sending || !conversationId || !userId) return;
+    if ((!trimmed && !selectedImage) || sending || !conversationId || !userId) return;
 
     setSending(true);
     setSendError("");
     try {
-      await sendMessage(conversationId, userId, trimmed);
+      await sendMessage(conversationId, userId, trimmed, selectedImage ?? undefined);
       if (value === text) setText("");
-    } catch {
-      setSendError("Message not sent. Check your connection and try again.");
+      setSelectedImage(null);
+    } catch (error) {
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : "Message or photo not sent. Check your connection and try again.",
+      );
     } finally {
       setSending(false);
     }
+  };
+
+  const handleChooseFromGallery = async () => {
+    setImageMenuVisible(false);
+    setSendError("");
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setSendError("Allow LearnLink to access your photos to attach an image.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedImage({ uri: asset.uri, mimeType: asset.mimeType ?? undefined });
+      }
+    } catch (error) {
+      setSendError(
+        error instanceof Error ? error.message : "Could not open your photo library.",
+      );
+    }
+  };
+
+  const handleTakePhoto = () => {
+    setImageMenuVisible(false);
+    setCameraVisible(true);
   };
 
   const renderItem = ({ item }: { item: Row }) => {
@@ -165,6 +210,7 @@ export default function ConversationScreen() {
 
     const message = item.message;
     const isMe = message.senderId === userId;
+    const imageUri = message.imageBase64 || message.imageUrl;
 
     return (
       <View
@@ -179,14 +225,23 @@ export default function ConversationScreen() {
             isMe ? styles.messageBubbleRight : styles.messageBubbleLeft,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isMe ? styles.messageTextRight : styles.messageTextLeft,
-            ]}
-          >
-            {message.text}
-          </Text>
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.messageImage}
+              contentFit="cover"
+            />
+          ) : null}
+          {message.text ? (
+            <Text
+              style={[
+                styles.messageText,
+                isMe ? styles.messageTextRight : styles.messageTextLeft,
+              ]}
+            >
+              {message.text}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.metaRow}>
           <Text style={styles.timestampText}>{formatClock(message.createdAt)}</Text>
@@ -288,7 +343,34 @@ export default function ConversationScreen() {
             ))}
           </ScrollView>
 
+          {selectedImage ? (
+            <View style={styles.selectedImageRow}>
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.selectedImage}
+                contentFit="cover"
+              />
+              <Pressable
+                style={styles.removeImageButton}
+                onPress={() => setSelectedImage(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove selected photo"
+              >
+                <Ionicons name="close-circle" size={24} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+          ) : null}
+
           <View style={styles.inputContainer}>
+            <Pressable
+              style={styles.attachButton}
+              onPress={() => setImageMenuVisible(true)}
+              disabled={sending}
+              accessibilityRole="button"
+              accessibilityLabel="Attach a photo"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.primary} />
+            </Pressable>
             <TextInput
               style={styles.input}
               placeholder="Type a message or share notes..."
@@ -302,10 +384,10 @@ export default function ConversationScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!text.trim() || sending) && styles.sendButtonDisabled,
+                ((!text.trim() && !selectedImage) || sending) && styles.sendButtonDisabled,
               ]}
               onPress={() => handleSend()}
-              disabled={!text.trim() || sending}
+              disabled={(!text.trim() && !selectedImage) || sending}
               accessibilityLabel="Send message"
             >
               {sending ? (
@@ -315,6 +397,45 @@ export default function ConversationScreen() {
               )}
             </TouchableOpacity>
           </View>
+
+          <Modal
+            visible={imageMenuVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setImageMenuVisible(false)}
+          >
+            <View style={styles.imageMenuBackdrop}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => setImageMenuVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close photo options"
+              />
+              <View style={styles.imageMenu}>
+                <Text style={styles.imageMenuTitle}>Add a photo</Text>
+                <Pressable style={styles.imageMenuOption} onPress={handleTakePhoto}>
+                  <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                  <Text style={styles.imageMenuOptionText}>Take Photo</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.imageMenuOption}
+                  onPress={handleChooseFromGallery}
+                >
+                  <Ionicons name="images-outline" size={22} color={colors.primary} />
+                  <Text style={styles.imageMenuOptionText}>Choose from Gallery</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+
+          <CameraModal
+            visible={cameraVisible}
+            onClose={() => setCameraVisible(false)}
+            onPhotoCaptured={(uri) => {
+              setSelectedImage({ uri, mimeType: "image/jpeg" });
+              setCameraVisible(false);
+            }}
+          />
         </KeyboardAvoidingView>
       )}
     </>
@@ -369,12 +490,38 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 16, lineHeight: 22 },
   messageTextLeft: { color: colors.textPrimary },
   messageTextRight: { color: colors.white },
+  messageImage: {
+    width: 220,
+    height: 180,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: colors.primarySoft,
+  },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   timestampText: { fontSize: 11, color: colors.textMuted },
   emptyChat: { padding: 32, alignItems: "center", transform: [{ scaleY: -1 }] },
   emptyChatText: { color: colors.textMuted, fontSize: 15 },
   sendError: { color: colors.error, paddingHorizontal: 16, paddingBottom: 4 },
   quickReplies: { gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  selectedImageRow: {
+    alignSelf: "flex-start",
+    marginHorizontal: 12,
+    marginBottom: 8,
+    position: "relative",
+  },
+  selectedImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+  },
   inputContainer: {
     flexDirection: "row",
     padding: 12,
@@ -382,6 +529,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     alignItems: "flex-end",
+  },
+  attachButton: {
+    width: 40,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 6,
   },
   input: {
     flex: 1,
@@ -392,6 +546,36 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     minHeight: 40,
     fontSize: 16,
+    color: colors.textPrimary,
+  },
+  imageMenuBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 16,
+    backgroundColor: "rgba(20, 20, 35, 0.35)",
+  },
+  imageMenu: {
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    gap: 6,
+  },
+  imageMenuTitle: {
+    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  imageMenuOption: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 8,
+  },
+  imageMenuOptionText: {
+    fontSize: 15,
+    fontWeight: "600",
     color: colors.textPrimary,
   },
   sendButton: {

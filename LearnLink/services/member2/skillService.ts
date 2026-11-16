@@ -120,6 +120,7 @@ function mapStudentSkill(
     userId,
     skillId,
     skillName,
+    isCustom: data.isCustom === true,
     categoryId:
       optionalString(data.categoryId) ??
       catalog.get(skillId)?.categoryId,
@@ -197,13 +198,8 @@ export async function getMySkills(): Promise<StudentSkill[]> {
 
 export async function saveUserSkill(input: UserSkillInput, skillEntryId?: string) {
   const userId = requireCurrentUserId();
-  const skillId = input.skillId.trim();
   const description = input.description.trim();
   const availability = input.availability.trim();
-
-  if (!skillId) {
-    throw new Error("Choose a skill from the catalog.");
-  }
   if (!SKILL_TYPES.includes(input.type)) {
     throw new Error("Choose whether you are offering or seeking this skill.");
   }
@@ -227,21 +223,49 @@ export async function saveUserSkill(input: UserSkillInput, skillEntryId?: string
     throw new Error("Descriptions must be 500 characters and availability 200 characters or fewer.");
   }
 
-  const catalogSnapshot = await getDoc(doc(db, "skills", skillId));
-  if (!catalogSnapshot.exists()) {
-    throw new Error("This skill is no longer in the catalog. Choose another skill.");
-  }
+  let skillId: string;
+  let skillName: string;
+  let categoryId: string | null = null;
+  const isCustom = input.source === "custom";
 
-  const catalogItem = mapCatalogItem(skillId, catalogSnapshot.data());
-  if (!catalogItem) {
-    throw new Error("This skill has invalid catalog data and cannot be saved.");
+  if (input.source === "custom") {
+    skillName = input.skillName.trim();
+    if (!skillName || skillName.length > 100) {
+      throw new Error("Custom skill names must be between 1 and 100 characters.");
+    }
+
+    const normalizedName = skillName
+      .normalize("NFC")
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    skillId = `custom_${encodeURIComponent(normalizedName)}`;
+  } else {
+    skillId = input.skillId.trim();
+    if (!skillId) {
+      throw new Error("Choose a skill from the catalog.");
+    }
+
+    const catalogSnapshot = await getDoc(doc(db, "skills", skillId));
+    if (!catalogSnapshot.exists()) {
+      throw new Error("This skill is no longer in the catalog. Choose another skill.");
+    }
+
+    const catalogItem = mapCatalogItem(skillId, catalogSnapshot.data());
+    if (!catalogItem) {
+      throw new Error("This skill has invalid catalog data and cannot be saved.");
+    }
+
+    skillId = catalogItem.id;
+    skillName = catalogItem.name;
+    categoryId = catalogItem.categoryId ?? null;
   }
 
   const skillData = {
     userId,
-    skillId: catalogItem.id,
-    skillName: catalogItem.name,
-    categoryId: catalogItem.categoryId ?? null,
+    skillId,
+    skillName,
+    isCustom,
+    categoryId,
     type: input.type,
     proficiencyLevel: input.proficiencyLevel,
     description: description || null,
@@ -256,7 +280,7 @@ export async function saveUserSkill(input: UserSkillInput, skillEntryId?: string
     existingSkills.some(
       (skill) =>
         skill.id !== skillEntryId &&
-        skill.skillId === catalogItem.id &&
+        skill.skillId === skillId &&
         skill.type === input.type,
     )
   ) {

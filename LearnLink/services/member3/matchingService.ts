@@ -1,7 +1,7 @@
 import { db as firestore } from '../../config/firebase';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { MatchingEngine } from './MatchingEngine';
-import type { IMatch, IUser } from '../../../src/types/matching.types';
+import type { IMatch, IUser } from '../../types/matching.types';
 
 const engine = new MatchingEngine();
 
@@ -13,6 +13,7 @@ export class MatchingService {
         userId: docItem.id,
         ...docItem.data(),
       }));
+      console.log("Total Users found in Firebase:", allUsers.length);
 
       const skillsSnap = await getDocs(collection(firestore, 'userSkills'));
       const allUserSkills = skillsSnap.docs.map((docItem) => ({

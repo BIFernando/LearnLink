@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Query } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 
 import { COLLECTIONS, awardXp, createNotification, db, isAlreadyExists, numberOr } from "./shared";
@@ -44,7 +44,7 @@ function parseBadge(id: string, data: FirebaseFirestore.DocumentData): BadgeDoc 
 
 async function progressCounts(userId: string): Promise<Record<BadgeRequirementType, number>> {
   const firestore = db();
-  const count = async (query: FirebaseFirestore.Query) => (await query.count().get()).data().count;
+  const count = async (query: Query) => (await query.count().get()).data().count;
   const sessions = firestore.collection(COLLECTIONS.sessions);
 
   const [userSnap, asTeacher, asLearner, reviewsGiven, challengesDone] = await Promise.all([

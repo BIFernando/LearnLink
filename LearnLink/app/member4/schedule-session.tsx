@@ -144,6 +144,7 @@ export default function ScheduleSessionScreen() {
         exchangeRequestId: exchangeRequestId.trim(),
         teacherId: sessionTeacherId,
         learnerId: sessionLearnerId,
+        proposedBy: currentUserId,
         skillId: skillId.trim(),
         scheduledAt,
         duration: durationMinutes,

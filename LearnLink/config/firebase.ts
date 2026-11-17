@@ -1,4 +1,3 @@
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // Firebase 12.18.0's shared types omit this React Native runtime export.
 // @ts-expect-error React Native export is missing from Firebase's shared declarations.

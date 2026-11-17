@@ -9,6 +9,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useReducer,
   useRef,
   useState,
   type PropsWithChildren,
@@ -51,8 +52,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Reload mutates the current Firebase user without changing its identity.
+  const [, refreshContext] = useReducer((revision: number) => revision + 1, 0);
   const authChangeId = useRef(0);
   const profileLoadId = useRef(0);
   const isMounted = useRef(false);
@@ -139,7 +141,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       console.log("[AuthProvider] Waiting for initial Firebase auth callback.");
     }
 
-
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
@@ -169,9 +170,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const currentAuthChangeId = ++authChangeId.current;
         profileLoadId.current += 1;
 
-
         setUser(firebaseUser);
-        setIsEmailVerified(firebaseUser?.emailVerified ?? false);
         setStudentProfile(null);
         setError(null);
         setIsLoading(Boolean(firebaseUser));
@@ -241,7 +240,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
           listenerError,
         );
         setUser(null);
-        setIsEmailVerified(false);
         setStudentProfile(null);
         setError(listenerError.message);
         setIsLoading(false);
@@ -274,7 +272,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     await reload(currentUser);
     const emailVerified = currentUser.emailVerified;
-    setIsEmailVerified(emailVerified);
+    refreshContext();
     return emailVerified;
   }
 

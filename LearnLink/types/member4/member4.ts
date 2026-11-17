@@ -20,6 +20,8 @@ export type SessionStatus =
   | "CANCELLED"
   | "DISPUTED";
 
+export type ProposalResolution = "REJECTED" | "WITHDRAWN";
+
 export type CreditTransactionType =
   | "EARN"
   | "SPEND"
@@ -45,6 +47,8 @@ export interface Session {
   exchangeRequestId: string;
   teacherId: string;
   learnerId: string;
+  proposedBy?: string;
+  proposalResolution?: ProposalResolution;
   skillId: string;
   scheduledAt: any;
   duration: number;

@@ -1,5 +1,5 @@
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,7 +11,12 @@ import {
 import { useFocusEffect, router } from "expo-router";
 
 import { useAuth } from "../../providers/AuthProvider";
+import { getSkillName } from "../../services/chatService";
 import { getUserSessions } from "../../services/member4/sessionService";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../services/member5/userService";
 import { Session } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 
@@ -57,11 +62,15 @@ function getScheduledDate(value: unknown): Date | null {
   }
 }
 
-function hasValidProposer(proposedBy: unknown): proposedBy is string {
+function hasValidProposer(
+  session: Session
+): session is Session & { proposedBy: string } {
+  const proposedBy = session.proposedBy;
   return (
     typeof proposedBy === "string" &&
     proposedBy.length > 0 &&
-    proposedBy.trim() === proposedBy
+    proposedBy.trim() === proposedBy &&
+    (proposedBy === session.teacherId || proposedBy === session.learnerId)
   );
 }
 
@@ -70,6 +79,46 @@ export default function SessionsScreen() {
   const [filter, setFilter] = useState<SessionFilter>("UPCOMING");
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const userProfiles = useUserProfiles(
+    sessions.flatMap((session) => [
+      session.teacherId,
+      session.learnerId,
+      ...(typeof session.proposedBy === "string" ? [session.proposedBy] : []),
+    ])
+  );
+  const [skillNames, setSkillNames] = useState<Record<string, string | null>>(
+    {}
+  );
+
+  useEffect(() => {
+    let active = true;
+    const skillIds = [...new Set(sessions.map((session) => session.skillId))];
+
+    Promise.all(
+      skillIds.map(async (skillId) => [skillId, await getSkillName(skillId)] as const)
+    )
+      .then((entries) => {
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load session skill names:", error);
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(skillIds.map((skillId) => [skillId, null])),
+          }));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sessions]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -108,30 +157,30 @@ export default function SessionsScreen() {
     (session) => getScheduledDate(session.scheduledAt) === null
   );
   const unknownDateProposerProposals = unknownDateProposals.filter(
-    (session) => !hasValidProposer(session.proposedBy)
+    (session) => !hasValidProposer(session)
   );
   const unknownDateKnownProposals = unknownDateProposals.filter((session) =>
-    hasValidProposer(session.proposedBy)
+    hasValidProposer(session)
   );
   const incomingProposals = user
     ? futureProposals.filter(
         (session) =>
-          hasValidProposer(session.proposedBy) &&
+          hasValidProposer(session) &&
           session.proposedBy !== user.uid
       )
     : [];
   const awaitingResponse = user
     ? futureProposals.filter(
         (session) =>
-          hasValidProposer(session.proposedBy) &&
+          hasValidProposer(session) &&
           session.proposedBy === user.uid
       )
     : [];
   const unknownProposerProposals = futureProposals.filter(
-    (session) => !hasValidProposer(session.proposedBy)
+    (session) => !hasValidProposer(session)
   );
   const pastUnknownProposals = pastProposals.filter(
-    (session) => !hasValidProposer(session.proposedBy)
+    (session) => !hasValidProposer(session)
   );
 
   const upcomingSessions = sessions.filter(
@@ -153,7 +202,7 @@ export default function SessionsScreen() {
       if (
         !["PROPOSED", "CONFIRMED", "IN_PROGRESS"].includes(session.status) ||
         (session.status === "PROPOSED" &&
-          !hasValidProposer(session.proposedBy))
+          !hasValidProposer(session))
       ) {
         return false;
       }
@@ -171,6 +220,19 @@ export default function SessionsScreen() {
       pathname: "/member4/session-details",
       params: { sessionId },
     });
+  }
+
+  function getStudentDisplayName(userId: string): string {
+    return Object.prototype.hasOwnProperty.call(userProfiles, userId)
+      ? displayNameOf(userProfiles[userId])
+      : "Loading student...";
+  }
+
+  function getSkillDisplayName(skillId: string): string {
+    if (!Object.prototype.hasOwnProperty.call(skillNames, skillId)) {
+      return "Loading skill...";
+    }
+    return skillNames[skillId] ?? "Skill unavailable";
   }
 
   function renderSession({ item }: { item: Session }) {
@@ -213,27 +275,27 @@ export default function SessionsScreen() {
     const dateValue = getScheduledDate(session.scheduledAt);
     const otherParticipantId =
       user?.uid === session.teacherId ? session.learnerId : session.teacherId;
-    const proposer = hasValidProposer(session.proposedBy)
+    const proposer = hasValidProposer(session)
       ? session.proposedBy
       : null;
     let proposalStatus = "Proposer unknown";
     if (category === "INCOMING" && proposer) {
-      proposalStatus = `Proposed by: ${proposer}`;
+      proposalStatus = `Proposed by: ${getStudentDisplayName(proposer)}`;
     } else if (category === "OUTGOING") {
       proposalStatus = "The other participant must respond.";
     } else if (category === "DATE_UNKNOWN" && proposer) {
       proposalStatus =
         proposer === user?.uid
           ? "You proposed this time; awaiting response."
-          : `Proposed by: ${proposer}`;
+          : `Proposed by: ${getStudentDisplayName(proposer)}`;
     }
     const content = (
       <>
         <Text style={styles.cardTitle}>
           {session.sessionType === "ONLINE" ? "Online Session" : "In-person Session"}
         </Text>
-        <Text>Other participant: {otherParticipantId}</Text>
-        <Text>Skill: {session.skillId}</Text>
+        <Text>Other participant: {getStudentDisplayName(otherParticipantId)}</Text>
+        <Text>Skill: {getSkillDisplayName(session.skillId)}</Text>
         <Text>
           Date: {dateValue === null
             ? "Date unavailable"

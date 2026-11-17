@@ -217,7 +217,7 @@ export default function SelectExchangeForSessionScreen() {
                   {choice.key === "offered" ? "Offered skill" : "Requested skill"}
                 </Text>
                 <Text style={styles.skillId}>
-                  {choice.skillName ?? `Skill ID: ${choice.skillId}`}
+                  {choice.skillName ?? "Skill unavailable"}
                 </Text>
               </View>
               <Ionicons

@@ -135,16 +135,12 @@ export default function StudentRegistrationScreen() {
         }
 
         setFormError(
-          error.userId
-            ? `${error.message} User ID: ${error.userId}.`
+          error.stage === "profile_creation"
+            ? "Your account was created, but your student profile could not be saved. Please contact support before trying to register again."
             : error.message,
         );
       } else {
-        setFormError(
-          error instanceof Error
-            ? error.message
-            : "Registration could not be completed. Please try again.",
-        );
+        setFormError("Registration could not be completed. Please try again.");
       }
     } finally {
       submissionInProgress.current = false;

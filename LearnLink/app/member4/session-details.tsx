@@ -1,5 +1,5 @@
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,11 @@ import {
 
 import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 import { getCurrentUserId } from "../../services/member4/currentUser";
+import { getSkillName } from "../../services/chatService";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../services/member5/userService";
 import { Session } from "../../types/member4/member4";
 import { ReportActionButton } from "../../components/reports/ReportActionButton";
 
@@ -82,6 +87,39 @@ export default function SessionDetailsScreen() {
   const [suggestionTime, setSuggestionTime] = useState("");
   const [showSuggestionForm, setShowSuggestionForm] = useState(false);
   const actionLock = useRef(false);
+  const completionConfirmationOpen = useRef(false);
+  const userProfiles = useUserProfiles(
+    session ? [session.teacherId, session.learnerId] : []
+  );
+  const [skillName, setSkillName] = useState<string | null | undefined>(
+    undefined
+  );
+  const sessionSkillId = session?.skillId;
+
+  useEffect(() => {
+    let active = true;
+
+    if (!sessionSkillId) {
+      setSkillName(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSkillName(undefined);
+    getSkillName(sessionSkillId)
+      .then((name) => {
+        if (active) setSkillName(name);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load session skill name:", error);
+        if (active) setSkillName(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sessionSkillId]);
 
   const loadSession = useCallback(
     async (showError = true): Promise<boolean> => {
@@ -263,22 +301,87 @@ export default function SessionDetailsScreen() {
   }
 
   async function handleCompletion() {
-    if (!session) return;
+    if (
+      !session ||
+      actionLoading ||
+      actionLock.current ||
+      completionConfirmationOpen.current
+    ) {
+      return;
+    }
+
+    const currentUserId = getCurrentUserId();
+    const isParticipant =
+      currentUserId === session.teacherId ||
+      currentUserId === session.learnerId;
+    const alreadyConfirmed =
+      session.completedBy?.includes(currentUserId) ?? false;
+
+    if (
+      !isParticipant ||
+      alreadyConfirmed ||
+      !["CONFIRMED", "IN_PROGRESS"].includes(session.status)
+    ) {
+      return;
+    }
+
+    completionConfirmationOpen.current = true;
 
     Alert.alert(
-      "Confirm Completion",
+      "Mark as Completed",
       "Confirm that you have completed this session?",
       [
-        { text: "Not Yet", style: "cancel" },
         {
-          text: "Confirm",
+          text: "Not Yet",
+          style: "cancel",
+          onPress: () => {
+            completionConfirmationOpen.current = false;
+          },
+        },
+        {
+          text: "Mark as Completed",
           onPress: async () => {
+            if (
+              !session ||
+              actionLock.current ||
+              session.completedBy?.includes(currentUserId) ||
+              !["CONFIRMED", "IN_PROGRESS"].includes(session.status)
+            ) {
+              completionConfirmationOpen.current = false;
+              return;
+            }
+
+            completionConfirmationOpen.current = false;
+            actionLock.current = true;
             try {
               setActionLoading(true);
 
-              const result = await confirmSessionCompletion(sessionId);
+              const result = await confirmSessionCompletion(session.id);
 
-              await loadSession();
+              const refreshed = await loadSession();
+              if (!refreshed) {
+                setSession((currentSession) => {
+                  if (!currentSession) return currentSession;
+
+                  const completedBy = currentSession.completedBy ?? [];
+                  const updatedCompletedBy = completedBy.includes(currentUserId)
+                    ? completedBy
+                    : [...completedBy, currentUserId];
+
+                  return result === "WAITING_FOR_OTHER"
+                    ? { ...currentSession, completedBy: updatedCompletedBy }
+                    : {
+                        ...currentSession,
+                        completedBy: [
+                          currentSession.teacherId,
+                          currentSession.learnerId,
+                        ],
+                        status: "COMPLETED",
+                        creditsTransferred:
+                          result === "COMPLETED_WITH_CREDITS",
+                      };
+                });
+              }
 
               Alert.alert(
                 result !== "WAITING_FOR_OTHER"
@@ -299,11 +402,18 @@ export default function SessionDetailsScreen() {
                   : "Could not record your confirmation."
               );
             } finally {
+              actionLock.current = false;
               setActionLoading(false);
             }
           },
         },
-      ]
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => {
+          completionConfirmationOpen.current = false;
+        },
+      }
     );
   }
 
@@ -366,8 +476,7 @@ export default function SessionDetailsScreen() {
     isParticipant && session.status === "CONFIRMED";
 
   const canConfirmCompletion =
-    ["CONFIRMED", "IN_PROGRESS"].includes(session.status) &&
-    Date.now() >= scheduledDate.getTime();
+    ["CONFIRMED", "IN_PROGRESS"].includes(session.status);
 
   const canGenerateAttendanceQr =
     currentUserId === session.teacherId &&
@@ -381,6 +490,22 @@ export default function SessionDetailsScreen() {
 
   const alreadyConfirmed =
     session.completedBy?.includes(currentUserId) ?? false;
+  const teacherName = Object.prototype.hasOwnProperty.call(
+    userProfiles,
+    session.teacherId
+  )
+    ? displayNameOf(userProfiles[session.teacherId])
+    : "Loading student...";
+  const learnerName = Object.prototype.hasOwnProperty.call(
+    userProfiles,
+    session.learnerId
+  )
+    ? displayNameOf(userProfiles[session.learnerId])
+    : "Loading student...";
+  const skillDisplayName =
+    skillName === undefined
+      ? "Loading skill..."
+      : skillName ?? "Skill unavailable";
 
   return (
     <ScrollView
@@ -390,9 +515,6 @@ export default function SessionDetailsScreen() {
       <Text style={styles.header}>Session Details</Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Session ID</Text>
-        <Text style={styles.value}>{session.id}</Text>
-
         <Text style={styles.label}>Status</Text>
         <Text style={styles.status}>{session.status}</Text>
 
@@ -419,11 +541,14 @@ export default function SessionDetailsScreen() {
         <Text style={styles.label}>Session Type</Text>
         <Text style={styles.value}>{session.sessionType}</Text>
 
-        <Text style={styles.label}>Teacher ID</Text>
-        <Text style={styles.value}>{session.teacherId}</Text>
+        <Text style={styles.label}>Teacher</Text>
+        <Text style={styles.value}>{teacherName}</Text>
 
-        <Text style={styles.label}>Learner ID</Text>
-        <Text style={styles.value}>{session.learnerId}</Text>
+        <Text style={styles.label}>Learner</Text>
+        <Text style={styles.value}>{learnerName}</Text>
+
+        <Text style={styles.label}>Skill</Text>
+        <Text style={styles.value}>{skillDisplayName}</Text>
 
         {session.sessionType === "ONLINE" && session.meetingLink ? (
           <TouchableOpacity
@@ -490,9 +615,9 @@ export default function SessionDetailsScreen() {
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={handleCompletion}
-          disabled={actionLoading}
+          disabled={actionLoading || actionLock.current}
         >
-          <Text style={styles.buttonText}>Confirm Session Completed</Text>
+          <Text style={styles.buttonText}>Mark as Completed</Text>
         </TouchableOpacity>
       )}
 

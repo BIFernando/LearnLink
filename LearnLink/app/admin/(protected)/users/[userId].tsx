@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
   getAdminUserDetails,
   type AdminUserDetails,
 } from "../../../../services/adminUsers";
+import { getSkillCategories } from "../../../../services/member2/skillService";
 
 export default function AdminUserDetailsScreen() {
   const router = useRouter();
@@ -21,6 +23,11 @@ export default function AdminUserDetailsScreen() {
   const [user, setUser] = useState<AdminUserDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>(
+    {}
+  );
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
 
   const loadUser = useCallback(async () => {
     if (!userId) {
@@ -49,6 +56,49 @@ export default function AdminUserDetailsScreen() {
   useEffect(() => {
     void loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    const categoryIds = [
+      ...new Set(
+        user?.skills.flatMap((skill) =>
+          skill.categoryId ? [skill.categoryId] : []
+        ) ?? []
+      ),
+    ];
+    let active = true;
+    setCategoryNames({});
+
+    if (categoryIds.length === 0) {
+      setCategoriesLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setCategoriesLoading(true);
+    getSkillCategories()
+      .then((categories) => {
+        if (active) {
+          setCategoryNames(
+            Object.fromEntries(
+              categories.map((category) => [category.id, category.name])
+            )
+          );
+        }
+      })
+      .catch((categoryError: unknown) => {
+        console.error("Failed to load category names for admin user:", categoryError);
+      })
+      .finally(() => {
+        if (active) {
+          setCategoriesLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   if (loading) {
     return (
@@ -92,6 +142,7 @@ export default function AdminUserDetailsScreen() {
         ? "Active"
         : "Inactive (this does not establish suspension)"
       : "Unavailable";
+  const profilePhotoUrl = user.profilePhotoUrl?.trim();
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -106,7 +157,6 @@ export default function AdminUserDetailsScreen() {
 
         <Text style={styles.eyebrow}>LEARNLINK / ADMIN / USER</Text>
         <Text style={styles.title}>{user.displayName ?? "User details"}</Text>
-        <Text style={styles.subtitle}>Account ID: {user.id}</Text>
 
         <InfoSection title="Account">
           <InfoRow label="Name" value={user.displayName} />
@@ -126,11 +176,20 @@ export default function AdminUserDetailsScreen() {
         <InfoSection title="Profile">
           <InfoRow label="Location" value={user.location} />
           <InfoRow label="Bio" value={user.bio} />
-          <InfoRow
-            label="Profile photo URL"
-            value={user.profilePhotoUrl}
-            multiline
-          />
+          <View style={styles.photoPreview}>
+            <Text style={styles.infoLabel}>Profile photo</Text>
+            {profilePhotoUrl && failedPhotoUrl !== profilePhotoUrl ? (
+              <Image
+                accessibilityLabel="User profile photo"
+                onError={() => setFailedPhotoUrl(profilePhotoUrl)}
+                resizeMode="cover"
+                source={{ uri: profilePhotoUrl }}
+                style={styles.profilePhoto}
+              />
+            ) : (
+              <Text style={styles.mutedText}>No profile photo</Text>
+            )}
+          </View>
           <InfoRow
             label="Rating"
             value={
@@ -143,24 +202,45 @@ export default function AdminUserDetailsScreen() {
 
         <InfoSection title="Skills">
           {user.skills.length ? (
-            user.skills.map((skill) => (
-              <View key={skill.id} style={styles.skillCard}>
-                <Text style={styles.skillName}>{skill.name}</Text>
-                {skill.details.length ? (
-                  skill.details.map((detail) => (
+            user.skills.map((skill) => {
+              const categoryDetail = skill.details.find(
+                (detail) => detail.label === "Category"
+              );
+              const additionalDetails = skill.details.filter(
+                (detail) => detail.label !== "Category"
+              );
+              const categoryDisplay = skill.categoryId
+                ? categoryNames[skill.categoryId] ??
+                  (categoriesLoading
+                    ? "Loading category..."
+                    : "Category unavailable")
+                : categoryDetail?.value;
+
+              return (
+                <View key={skill.id} style={styles.skillCard}>
+                  <Text style={styles.skillName}>{skill.name}</Text>
+                  {skill.categoryId || categoryDetail ? (
                     <InfoRow
-                      key={detail.label}
-                      label={detail.label}
-                      value={detail.value}
+                      label="Category"
+                      value={categoryDisplay}
                     />
-                  ))
-                ) : (
-                  <Text style={styles.mutedText}>
-                    No additional skill details recorded.
-                  </Text>
-                )}
-              </View>
-            ))
+                  ) : null}
+                  {additionalDetails.length ? (
+                    additionalDetails.map((detail) => (
+                      <InfoRow
+                        key={detail.label}
+                        label={detail.label}
+                        value={detail.value}
+                      />
+                    ))
+                  ) : (
+                    <Text style={styles.mutedText}>
+                      No additional skill details recorded.
+                    </Text>
+                  )}
+                </View>
+              );
+            })
           ) : (
             <Text style={styles.mutedText}>
               No user-linked skills were found.
@@ -336,6 +416,18 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     paddingHorizontal: 12,
     paddingVertical: 7,
+  },
+  photoPreview: {
+    borderTopColor: "#EDF1F6",
+    borderTopWidth: 1,
+    gap: 10,
+    paddingVertical: 10,
+  },
+  profilePhoto: {
+    backgroundColor: "#E2E8F0",
+    borderRadius: 64,
+    height: 128,
+    width: 128,
   },
   skillName: {
     color: "#24324A",

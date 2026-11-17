@@ -192,9 +192,6 @@ export default function AttendanceQrScreen() {
       <Text style={styles.header}>Attendance QR Code</Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Session ID</Text>
-        <Text style={styles.value}>{session.id}</Text>
-
         <Text style={styles.label}>Session Type</Text>
         <Text style={styles.value}>{session.sessionType}</Text>
 

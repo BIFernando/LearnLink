@@ -36,7 +36,9 @@ export interface AdminUserPage {
 
 export interface AdminUserSkill {
   id: string;
+  skillId?: string;
   name: string;
+  categoryId?: string;
   details: { label: string; value: string }[];
 }
 
@@ -163,15 +165,13 @@ export async function getAdminUserDetails(
       optionalString(skillData.skillName) ??
       optionalString(skillData.name) ??
       optionalString(skillData.skill) ??
-      optionalString(skillData.skillId) ??
-      skillDocument.id;
+      "Skill unavailable";
     const details: { label: string; value: string }[] = [];
 
     for (const [field, label] of [
       ["level", "Level"],
       ["proficiency", "Proficiency"],
       ["category", "Category"],
-      ["categoryId", "Category ID"],
     ]) {
       const value = optionalString(skillData[field]);
       if (value) {
@@ -179,7 +179,13 @@ export async function getAdminUserDetails(
       }
     }
 
-    return { id: skillDocument.id, name, details };
+    return {
+      id: skillDocument.id,
+      skillId: optionalString(skillData.skillId),
+      name,
+      categoryId: optionalString(skillData.categoryId),
+      details,
+    };
   });
 
   return {

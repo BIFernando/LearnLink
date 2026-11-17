@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,11 @@ import {
   moderateAdminReport,
   type AdminReportDetails,
 } from "../../../../services/adminReports";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../../../services/member5/userService";
+import { getSkillName } from "../../../../services/chatService";
 import type {
   ModerationAction,
   ModerationHistoryRecord,
@@ -26,6 +31,18 @@ import { REPORT_REASONS } from "../../../../types/reports";
 function formatDate(value: Date | undefined): string {
   return value ? value.toLocaleString() : "Date unavailable";
 }
+
+const PARTICIPANT_ID_FIELDS = new Set([
+  "Sender ID",
+  "Receiver ID",
+  "Teacher ID",
+  "Learner ID",
+]);
+const SKILL_ID_FIELDS = new Set([
+  "Offered skill",
+  "Requested skill",
+  "Skill ID",
+]);
 
 export default function AdminReportDetailsScreen() {
   const router = useRouter();
@@ -40,6 +57,86 @@ export default function AdminReportDetailsScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [skillNames, setSkillNames] = useState<Record<string, string | null>>(
+    {}
+  );
+  const targetParticipantIds = useMemo(
+    () =>
+      details?.target?.fields.flatMap((field) =>
+        PARTICIPANT_ID_FIELDS.has(field.label) ? [field.value] : []
+      ) ?? [],
+    [details]
+  );
+  const targetSkillIds = useMemo(
+    () =>
+      details?.target?.fields.flatMap((field) =>
+        SKILL_ID_FIELDS.has(field.label) ? [field.value] : []
+      ) ?? [],
+    [details]
+  );
+  const userProfiles = useUserProfiles(
+    [
+      ...history.flatMap((event) =>
+        typeof event.adminUid === "string" && event.adminUid.length > 0
+          ? [event.adminUid]
+          : []
+      ),
+      ...(details?.report.reviewedBy ? [details.report.reviewedBy] : []),
+      ...targetParticipantIds,
+    ]
+  );
+
+  useEffect(() => {
+    let active = true;
+    setSkillNames({});
+
+    Promise.all(
+      [...new Set(targetSkillIds)].map(async (skillId) => {
+        const name = await getSkillName(skillId);
+        return [skillId, name?.trim() || null] as const;
+      })
+    ).then((entries) => {
+      if (active) {
+        setSkillNames(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [targetSkillIds]);
+
+  function getAdministratorDisplayName(adminUid: string | undefined): string {
+    if (!adminUid) return "Administrator unavailable";
+    if (!Object.prototype.hasOwnProperty.call(userProfiles, adminUid)) {
+      return "Loading administrator...";
+    }
+
+    const profile = userProfiles[adminUid];
+    return profile?.displayName
+      ? displayNameOf(profile)
+      : "Administrator unavailable";
+  }
+
+  function getParticipantDisplayName(userId: string | undefined): string {
+    if (!userId) return "Participant unavailable";
+    if (!Object.prototype.hasOwnProperty.call(userProfiles, userId)) {
+      return "Loading participant...";
+    }
+
+    const profile = userProfiles[userId];
+    return profile?.displayName
+      ? displayNameOf(profile)
+      : "Participant unavailable";
+  }
+
+  function getSkillDisplayName(skillId: string | undefined): string {
+    if (!skillId) return "Skill unavailable";
+    if (!Object.prototype.hasOwnProperty.call(skillNames, skillId)) {
+      return "Loading skill...";
+    }
+    return skillNames[skillId] ?? "Skill unavailable";
+  }
 
   const loadReport = useCallback(async () => {
     if (!reportId) {
@@ -157,6 +254,32 @@ export default function AdminReportDetailsScreen() {
   const reasonLabel = REPORT_REASONS.find(
     (reason) => reason.value === report.reason
   )?.label;
+  const targetFields = details.target?.fields ?? [];
+  const getTargetFieldValue = (label: string) =>
+    targetFields.find((field) => field.label === label)?.value;
+  const targetTitle =
+    !details.target ||
+    details.target.title === "Target record unavailable" ||
+    details.target.title === "Reported user"
+      ? "Target unavailable"
+      : details.target.title;
+  const targetSummary =
+    report.targetType === "USER"
+      ? targetTitle
+      : report.targetType === "EXCHANGE_REQUEST"
+        ? `Sender: ${getParticipantDisplayName(getTargetFieldValue("Sender ID"))}; receiver: ${getParticipantDisplayName(getTargetFieldValue("Receiver ID"))}; skills: ${getSkillDisplayName(getTargetFieldValue("Offered skill"))} ⇄ ${getSkillDisplayName(getTargetFieldValue("Requested skill"))}`
+        : report.targetType === "SESSION"
+          ? `Teacher: ${getParticipantDisplayName(getTargetFieldValue("Teacher ID"))}; learner: ${getParticipantDisplayName(getTargetFieldValue("Learner ID"))}; skill: ${getSkillDisplayName(getTargetFieldValue("Skill ID"))}`
+          : "Target unavailable";
+  const visibleTargetFields = targetFields.filter(
+    (field) =>
+      !PARTICIPANT_ID_FIELDS.has(field.label) &&
+      !SKILL_ID_FIELDS.has(field.label) &&
+      field.label !== "Target ID" &&
+      field.label !== "User ID" &&
+      field.label !== "Request ID" &&
+      field.label !== "Session ID"
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -182,24 +305,71 @@ export default function AdminReportDetailsScreen() {
         <InfoRow label="Reason" value={reasonLabel ?? report.reason} />
         <InfoRow label="Description" value={report.description} />
         <InfoRow label="Submitted" value={formatDate(report.createdAt)} />
-        <InfoRow label="Reporter ID" value={report.reporterId} />
         <InfoRow
           label="Reporter name"
-          value={details.reporter?.name}
+          value={details.reporter?.name ?? "Reporter unavailable"}
         />
         <InfoRow
           label="Reporter email"
-          value={details.reporter?.email}
+          value={details.reporter?.email ?? "Email unavailable"}
         />
         <InfoRow label="Target type" value={report.targetType} />
-        <InfoRow label="Target ID" value={report.targetId} />
+        <InfoRow label="Target" value={targetSummary} />
       </View>
 
       {details.target ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Reported target</Text>
-          <Text style={styles.targetTitle}>{details.target.title}</Text>
-          {details.target.fields.map((field) => (
+          <Text style={styles.targetTitle}>{targetTitle}</Text>
+          {report.targetType === "EXCHANGE_REQUEST" ? (
+            <>
+              <InfoRow
+                label="Sender"
+                value={getParticipantDisplayName(
+                  getTargetFieldValue("Sender ID")
+                )}
+              />
+              <InfoRow
+                label="Receiver"
+                value={getParticipantDisplayName(
+                  getTargetFieldValue("Receiver ID")
+                )}
+              />
+              <InfoRow
+                label="Offered skill"
+                value={getSkillDisplayName(
+                  getTargetFieldValue("Offered skill")
+                )}
+              />
+              <InfoRow
+                label="Requested skill"
+                value={getSkillDisplayName(
+                  getTargetFieldValue("Requested skill")
+                )}
+              />
+            </>
+          ) : null}
+          {report.targetType === "SESSION" ? (
+            <>
+              <InfoRow
+                label="Teacher"
+                value={getParticipantDisplayName(
+                  getTargetFieldValue("Teacher ID")
+                )}
+              />
+              <InfoRow
+                label="Learner"
+                value={getParticipantDisplayName(
+                  getTargetFieldValue("Learner ID")
+                )}
+              />
+              <InfoRow
+                label="Skill"
+                value={getSkillDisplayName(getTargetFieldValue("Skill ID"))}
+              />
+            </>
+          ) : null}
+          {visibleTargetFields.map((field) => (
             <InfoRow key={field.label} label={field.label} value={field.value} />
           ))}
         </View>
@@ -208,7 +378,10 @@ export default function AdminReportDetailsScreen() {
       {report.reviewedBy ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Review</Text>
-          <InfoRow label="Reviewed by" value={report.reviewedBy} />
+          <InfoRow
+            label="Reviewed by"
+            value={getAdministratorDisplayName(report.reviewedBy)}
+          />
           <InfoRow label="Reviewed at" value={formatDate(report.reviewedAt)} />
         </View>
       ) : null}
@@ -270,7 +443,10 @@ export default function AdminReportDetailsScreen() {
                 {event.action ?? "Unrecognized action"} ·{" "}
                 {event.previousStatus ?? "?"} to {event.newStatus ?? "?"}
               </Text>
-              <InfoRow label="Admin UID" value={event.adminUid} />
+              <InfoRow
+                label="Administrator"
+                value={getAdministratorDisplayName(event.adminUid)}
+              />
               <InfoRow label="Time" value={formatDate(event.timestamp)} />
               <InfoRow label="Internal note" value={event.moderationNote} />
             </View>

@@ -12,10 +12,16 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
+import { getSkillName } from "../../services/chatService";
 import { createSession } from "../../services/member4/sessionService";
 import { SessionType } from "../../types/member4/member4";
 import { getCurrentUserId } from "@/services/member4/currentUser";
 import { getExchangeRequest } from "@/services/member4/exchangeService";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "@/services/member5/userService";
+import type { ExchangeRequest } from "@/types/member4/member4";
 
 export default function ScheduleSessionScreen() {
   const {
@@ -35,8 +41,39 @@ export default function ScheduleSessionScreen() {
   const [meetingLink, setMeetingLink] = useState("");
   const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exchangeInfo, setExchangeInfo] = useState<ExchangeRequest | null>(null);
+  const [exchangeInfoLoading, setExchangeInfoLoading] = useState(false);
+  const [exchangeInfoError, setExchangeInfoError] = useState<string | null>(null);
+  const [skillName, setSkillName] = useState<string | null | undefined>(undefined);
+  const [skillNameLoading, setSkillNameLoading] = useState(false);
 
   const currentUserId = getCurrentUserId();
+  const normalizedExchangeRequestId = exchangeRequestId.trim();
+  const normalizedSkillId = skillId.trim();
+  const selectedExchange =
+    exchangeInfo?.id === normalizedExchangeRequestId ? exchangeInfo : null;
+  const otherParticipantId = selectedExchange
+    ? selectedExchange.senderId === currentUserId
+      ? selectedExchange.receiverId
+      : selectedExchange.senderId
+    : "";
+  const userProfiles = useUserProfiles(
+    otherParticipantId ? [otherParticipantId] : []
+  );
+  const skillBelongsToExchange =
+    selectedExchange !== null &&
+    (normalizedSkillId === selectedExchange.offeredSkillId ||
+      normalizedSkillId === selectedExchange.requestedSkillId);
+  const otherParticipantName = otherParticipantId
+    ? Object.prototype.hasOwnProperty.call(userProfiles, otherParticipantId)
+      ? displayNameOf(userProfiles[otherParticipantId])
+      : "Loading student..."
+    : "Participant unavailable";
+  const skillDisplayName = !skillBelongsToExchange
+    ? "Choose a skill from the selected exchange."
+    : skillNameLoading || skillName === undefined
+      ? "Loading skill..."
+      : skillName ?? "Skill unavailable";
 
   useEffect(() => {
     const requestId = Array.isArray(exchangeRequestIdParam)
@@ -54,6 +91,76 @@ export default function ScheduleSessionScreen() {
       setSkillId(selectedSkillId);
     }
   }, [exchangeRequestIdParam, skillIdParam]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!normalizedExchangeRequestId) {
+      setExchangeInfo(null);
+      setExchangeInfoLoading(false);
+      setExchangeInfoError(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    setExchangeInfo(null);
+    setExchangeInfoLoading(true);
+    setExchangeInfoError(null);
+    getExchangeRequest(normalizedExchangeRequestId)
+      .then((request) => {
+        if (!active) return;
+        setExchangeInfo(request);
+        if (!request) {
+          setExchangeInfoError(
+            "Exchange not found. Choose an accepted exchange to continue."
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load selected exchange:", error);
+        if (active) {
+          setExchangeInfoError("Could not load the selected exchange.");
+        }
+      })
+      .finally(() => {
+        if (active) setExchangeInfoLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [normalizedExchangeRequestId]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!skillBelongsToExchange) {
+      setSkillName(null);
+      setSkillNameLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSkillName(undefined);
+    setSkillNameLoading(true);
+    getSkillName(normalizedSkillId)
+      .then((name) => {
+        if (active) setSkillName(name);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load selected skill name:", error);
+        if (active) setSkillName(null);
+      })
+      .finally(() => {
+        if (active) setSkillNameLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [normalizedSkillId, skillBelongsToExchange]);
 
   async function handleSchedule() {
     if (
@@ -108,10 +215,12 @@ export default function ScheduleSessionScreen() {
 
     try {
       setLoading(true);
-      const request = await getExchangeRequest(exchangeRequestId.trim());
+      const request = selectedExchange;
 
       if (!request) {
-        throw new Error("Exchange request not found.");
+        throw new Error(
+          exchangeInfoError ?? "Choose an accepted exchange to continue."
+        );
       }
 
       if (request.status !== "ACCEPTED") {
@@ -140,7 +249,7 @@ export default function ScheduleSessionScreen() {
         throw new Error("The selected skill does not belong to this exchange.");
       }
 
-      const sessionId = await createSession({
+      await createSession({
         exchangeRequestId: exchangeRequestId.trim(),
         teacherId: sessionTeacherId,
         learnerId: sessionLearnerId,
@@ -158,7 +267,7 @@ export default function ScheduleSessionScreen() {
 
       Alert.alert(
         "Session proposed",
-        `Session ID: ${sessionId}\nThe session has been saved.`,
+        "The session has been saved.",
         [
           {
             text: "OK",
@@ -185,26 +294,39 @@ export default function ScheduleSessionScreen() {
     >
       <Text style={styles.header}>Schedule a Session</Text>
       <Text style={styles.help}>
-        Enter the accepted exchange details and propose a time.
+        Review the selected exchange and propose a time.
       </Text>
 
-      <Text style={styles.label}>Exchange Request ID</Text>
-      <TextInput
-        style={styles.input}
-        value={exchangeRequestId}
-        onChangeText={setExchangeRequestId}
-        placeholder="Enter request document ID"
-        autoCapitalize="none"
-      />
+      <View style={styles.selectionCard}>
+        <Text style={styles.label}>Accepted exchange</Text>
+        {exchangeInfoLoading ? (
+          <Text style={styles.selectionDetail}>Loading exchange...</Text>
+        ) : selectedExchange ? (
+          <>
+            <Text style={styles.selectionTitle}>{otherParticipantName}</Text>
+            <Text style={styles.selectionDetail}>
+              {selectedExchange.exchangeType === "CREDIT"
+                ? `Credit exchange · ${selectedExchange.creditAmount} credits`
+                : "Direct exchange"}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.selectionDetail}>
+            {exchangeInfoError ?? "Select an accepted exchange to continue."}
+          </Text>
+        )}
+        <TouchableOpacity
+          style={styles.selectionButton}
+          onPress={() => router.push("/member4/select-exchange-for-session")}
+        >
+          <Text style={styles.selectionButtonText}>
+            {selectedExchange ? "Change exchange" : "Choose an accepted exchange"}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <Text style={styles.label}>Skill ID</Text>
-      <TextInput
-        style={styles.input}
-        value={skillId}
-        onChangeText={setSkillId}
-        placeholder="Enter skill document ID"
-        autoCapitalize="none"
-      />
+      <Text style={styles.label}>Selected skill</Text>
+      <Text style={styles.selectionDetail}>{skillDisplayName}</Text>
 
       <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
       <TextInput
@@ -301,6 +423,11 @@ const styles = StyleSheet.create({
   help: { fontSize: 14, color: "#666", marginBottom: 12 },
   label: { fontSize: 15, fontWeight: "600", marginTop: 16, marginBottom: 7 },
   input: { borderWidth: 1, borderColor: "#aaa", borderRadius: 8, padding: 12, fontSize: 16 },
+  selectionCard: { borderWidth: 1, borderColor: "#aaa", borderRadius: 8, padding: 12 },
+  selectionTitle: { fontSize: 16, fontWeight: "600", marginTop: 6 },
+  selectionDetail: { color: "#555", marginTop: 6 },
+  selectionButton: { alignSelf: "flex-start", marginTop: 12, paddingVertical: 6 },
+  selectionButtonText: { color: "#2563eb", fontWeight: "600" },
   typeRow: { flexDirection: "row", gap: 10 },
   typeButton: { flex: 1, padding: 14, borderWidth: 1, borderColor: "#aaa", borderRadius: 8, alignItems: "center" },
   selected: { borderColor: "#2563eb", borderWidth: 2, backgroundColor: "#eff6ff" },

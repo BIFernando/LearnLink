@@ -15,6 +15,10 @@ import {
   getAdminReportsPage,
 } from "../../services/adminReports";
 import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../services/member5/userService";
+import {
   REPORT_REASONS,
   REPORT_STATUSES,
   type ReportFilter,
@@ -39,6 +43,27 @@ export function ReportsManagementScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const requestId = useRef(0);
+  const profileIds = reports.flatMap((report) => [
+    ...(report.reporterId ? [report.reporterId] : []),
+    ...(report.targetType === "USER" && report.targetId
+      ? [report.targetId]
+      : []),
+  ]);
+  const profiles = useUserProfiles(profileIds);
+
+  function getProfileName(
+    userId: string | undefined,
+    unavailableLabel: string,
+    loadingLabel: string
+  ): string {
+    if (!userId) return unavailableLabel;
+    if (!Object.prototype.hasOwnProperty.call(profiles, userId)) {
+      return loadingLabel;
+    }
+
+    const profile = profiles[userId];
+    return profile?.displayName ? displayNameOf(profile) : unavailableLabel;
+  }
 
   const loadFirstPage = useCallback(
     async (isRefresh = false) => {
@@ -124,6 +149,19 @@ export function ReportsManagementScreen() {
     const reasonLabel = REPORT_REASONS.find(
       (reason) => reason.value === item.reason
     )?.label;
+    const targetSummary =
+      item.targetType === "USER"
+        ? getProfileName(
+            item.targetId,
+            "Target unavailable",
+            "Loading target..."
+          )
+        : item.targetType === "EXCHANGE_REQUEST"
+          ? "Exchange request"
+          : item.targetType === "SESSION"
+            ? "Session"
+            : "Target unavailable";
+
     return (
       <Pressable
         accessibilityRole="button"
@@ -138,10 +176,15 @@ export function ReportsManagementScreen() {
           Reason: {reasonLabel ?? item.reason ?? "Unavailable"}
         </Text>
         <Text style={styles.detail}>
-          Reporter: {item.reporterId ?? "Unavailable"}
+          Reporter:{" "}
+          {getProfileName(
+            item.reporterId,
+            "Reporter unavailable",
+            "Loading reporter..."
+          )}
         </Text>
         <Text style={styles.detail}>
-          Target ID: {item.targetId ?? "Unavailable"}
+          Target: {targetSummary}
         </Text>
         <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
         {!item.recognized ? (

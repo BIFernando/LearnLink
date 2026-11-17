@@ -54,6 +54,16 @@ export default function Member4Layout() {
         />
 
         <Stack.Screen
+          name="attendance-qr"
+          options={{ title: "Attendance QR" }}
+        />
+
+        <Stack.Screen
+          name="attendance-scan"
+          options={{ title: "Scan Attendance QR" }}
+        />
+
+        <Stack.Screen
           name="credit-wallet"
           options={{ title: "Credit Wallet" }}
         />

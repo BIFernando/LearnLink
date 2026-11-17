@@ -368,10 +368,14 @@ export function CatalogManagementScreen({
           </Text>
           {isSkills ? (
             <Text style={styles.recordMeta}>
-              Category: {categoryName ?? item.categoryId ?? "None"}
+              Category: {item.categoryId
+                ? categoryName ?? "Category unavailable"
+                : "None"}
             </Text>
           ) : null}
-          <Text style={styles.recordMeta}>Document ID: {item.id}</Text>
+          {!isSkills ? (
+            <Text style={styles.recordMeta}>Document ID: {item.id}</Text>
+          ) : null}
           {!item.editable ? (
             <Text style={styles.legacyWarning}>
               Unrecognized legacy document — read-only

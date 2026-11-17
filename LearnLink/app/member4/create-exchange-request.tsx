@@ -2,7 +2,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { getSkillName } from '../../services/chatService';
 import { createExchangeRequest } from '../../services/member4/exchangeService';
+import {
+  displayNameOf,
+  useUserProfiles,
+} from '../../services/member5/userService';
 import { ExchangeType } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
@@ -25,6 +30,10 @@ export default function CreateExchangeRequest() {
   const [message, setMessage] = useState('');
   const [exchangeType, setExchangeType] = useState<ExchangeType>('DIRECT');
   const [loading, setLoading] = useState(false);
+  const userProfiles = useUserProfiles(receiverId ? [receiverId] : []);
+  const [resolvedSkillNames, setResolvedSkillNames] = useState<
+    Record<string, string | null>
+  >({});
 
   useEffect(() => {
     if (typeof params.receiverId === "string") {
@@ -53,6 +62,87 @@ export default function CreateExchangeRequest() {
     params.requestedSkillId,
     params.requestedSkillName,
   ]);
+
+  useEffect(() => {
+    let active = true;
+    const skillIds = [
+      ...new Set(
+        [
+          ...(offeredSkillId &&
+          (!offeredSkillName.trim() || offeredSkillName.trim() === offeredSkillId)
+            ? [offeredSkillId]
+            : []),
+          ...(requestedSkillId &&
+          (!requestedSkillName.trim() ||
+            requestedSkillName.trim() === requestedSkillId)
+            ? [requestedSkillId]
+            : []),
+        ]
+      ),
+    ];
+
+    Promise.all(
+      skillIds.map(async (skillId) => [skillId, await getSkillName(skillId)] as const)
+    )
+      .then((entries) => {
+        if (active) {
+          setResolvedSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load selected skill names:", error);
+        if (active) {
+          setResolvedSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(skillIds.map((skillId) => [skillId, null])),
+          }));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    offeredSkillId,
+    offeredSkillName,
+    requestedSkillId,
+    requestedSkillName,
+  ]);
+
+  function getReceiverDisplayName(): string {
+    if (!receiverId) return "No student selected.";
+    if (!Object.prototype.hasOwnProperty.call(userProfiles, receiverId)) {
+      return receiverName && receiverName !== receiverId
+        ? receiverName
+        : "Loading student...";
+    }
+
+    const profile = userProfiles[receiverId];
+    const profileName = displayNameOf(profile);
+    return profileName === "LearnLink Peer" &&
+      receiverName &&
+      receiverName !== receiverId
+      ? receiverName
+      : profileName;
+  }
+
+  function getSkillDisplayName(skillId: string, providedName: string): string {
+    if (!skillId) return "No skill selected.";
+
+    const friendlyProvidedName =
+      providedName.trim() && providedName.trim() !== skillId
+        ? providedName.trim()
+        : null;
+    if (friendlyProvidedName) return friendlyProvidedName;
+
+    if (!Object.prototype.hasOwnProperty.call(resolvedSkillNames, skillId)) {
+      return "Loading skill...";
+    }
+    return resolvedSkillNames[skillId] ?? "Skill unavailable";
+  }
 
   //Submit function
   async function handleSubmit() {
@@ -117,50 +207,29 @@ return (
         Create Exchange Request
       </Text>
 
-      <Text style={styles.label}>
-        Student ID
-      </Text>
+      <View style={styles.selectionCard}>
+        <Text style={styles.label}>Student</Text>
+        <Text style={styles.selectionValue}>{getReceiverDisplayName()}</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Enter student ID"
-        value={receiverId}
-        onChangeText={setReceiverId}
-        autoCapitalize="none"
-      />
-      {receiverName ? (
-        <Text style={styles.selectionHint}>Requesting an exchange with {receiverName}</Text>
-      ) : null}
+        <Text style={styles.label}>Skill You Offer</Text>
+        <Text style={styles.selectionValue}>
+          {getSkillDisplayName(offeredSkillId, offeredSkillName)}
+        </Text>
 
-      <Text style={styles.label}>
-        Skill You Offer
-      </Text>
+        <Text style={styles.label}>Skill You Want</Text>
+        <Text style={styles.selectionValue}>
+          {getSkillDisplayName(requestedSkillId, requestedSkillName)}
+        </Text>
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Enter offered skill ID"
-        value={offeredSkillId}
-        onChangeText={setOfferedSkillId}
-        autoCapitalize="none"
-      />
-      {offeredSkillName ? (
-        <Text style={styles.selectionHint}>Selected from your portfolio: {offeredSkillName}</Text>
-      ) : null}
-
-      <Text style={styles.label}>
-        Skill You Want
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Enter requested skill ID"
-        value={requestedSkillId}
-        onChangeText={setRequestedSkillId}
-        autoCapitalize="none"
-      />
-      {requestedSkillName ? (
-        <Text style={styles.selectionHint}>Requested from their portfolio: {requestedSkillName}</Text>
-      ) : null}
+      <TouchableOpacity
+        style={styles.selectionButton}
+        onPress={() => router.push("/explore")}
+      >
+        <Text style={styles.selectionButtonText}>
+          {receiverId ? "Choose a different student or skill" : "Browse students and skills"}
+        </Text>
+      </TouchableOpacity>
 
       <Text style={styles.label}>
         Exchange Type
@@ -256,10 +325,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  selectionHint: {
-    color: "#5C5F73",
-    fontSize: 12,
-    marginTop: 5,
+  selectionCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 14,
+  },
+
+  selectionValue: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+
+  selectionButton: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+
+  selectionButtonText: {
+    color: "#2563EB",
+    fontWeight: "600",
   },
 
   messageInput: {

@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
+import { getSkillName } from "../../services/chatService";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +11,10 @@ import {
   View,
 } from "react-native";
 
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../services/member5/userService";
 import {
   getIncomingRequests,
   getOutgoingRequests,
@@ -24,6 +29,57 @@ export default function ExchangeRequestScreen() {
   const [outgoingRequests, setOutgoingRequests] = useState<ExchangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const requests = useMemo(
+    () => [...incomingRequests, ...outgoingRequests],
+    [incomingRequests, outgoingRequests]
+  );
+  const userProfiles = useUserProfiles(
+    requests
+      .flatMap((request) => [request.senderId, request.receiverId])
+      .filter((userId) => userId.length > 0)
+  );
+  const [skillNames, setSkillNames] = useState<Record<string, string | null>>(
+    {}
+  );
+
+  useEffect(() => {
+    let active = true;
+    const skillIds = [
+      ...new Set(
+        requests
+          .flatMap((request) => [
+            request.offeredSkillId,
+            request.requestedSkillId,
+          ])
+          .filter((skillId) => skillId.length > 0)
+      ),
+    ];
+
+    Promise.all(
+      skillIds.map(async (skillId) => [skillId, await getSkillName(skillId)] as const)
+    )
+      .then((entries) => {
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load exchange skill names:", error);
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(skillIds.map((skillId) => [skillId, null])),
+          }));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [requests]);
 
   const loadRequests = useCallback(async (isRefresh = false) => {
   try {
@@ -61,6 +117,21 @@ export default function ExchangeRequestScreen() {
     }, [loadRequests])
   );
 
+  function getStudentDisplayName(userId: string): string {
+    if (!userId) return "Student unavailable";
+    return Object.prototype.hasOwnProperty.call(userProfiles, userId)
+      ? displayNameOf(userProfiles[userId])
+      : "Loading student...";
+  }
+
+  function getSkillDisplayName(skillId: string): string {
+    if (!skillId) return "Skill unavailable";
+    if (!Object.prototype.hasOwnProperty.call(skillNames, skillId)) {
+      return "Loading skill...";
+    }
+    return skillNames[skillId] ?? "Skill unavailable";
+  }
+
   function renderRequest({ item }: { item: ExchangeRequest }) {
     return (
       <TouchableOpacity
@@ -78,8 +149,18 @@ export default function ExchangeRequestScreen() {
           <Text style={styles.status}>{item.status}</Text>
         </View>
 
-        <Text style={styles.detail}>From: {item.senderId}</Text>
-        <Text style={styles.detail}>To: {item.receiverId}</Text>
+        <Text style={styles.detail}>
+          From: {getStudentDisplayName(item.senderId)}
+        </Text>
+        <Text style={styles.detail}>
+          To: {getStudentDisplayName(item.receiverId)}
+        </Text>
+        <Text style={styles.detail}>
+          Offered skill: {getSkillDisplayName(item.offeredSkillId)}
+        </Text>
+        <Text style={styles.detail}>
+          Requested skill: {getSkillDisplayName(item.requestedSkillId)}
+        </Text>
 
         {item.message ? (
           <Text style={styles.message}>{item.message}</Text>

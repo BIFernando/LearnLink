@@ -10,10 +10,15 @@ import {
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { getSkillName } from "../../services/chatService";
 import {
   getExchangeRequest,
   updateExchangeStatus,
 } from "../../services/member4/exchangeService";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../services/member5/userService";
 
 import { ExchangeRequest } from "../../types/member4/member4";
 import { getCurrentUserId } from "../../services/member4/currentUser";
@@ -29,12 +34,72 @@ export default function ExchangeRequestDetailsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const userProfiles = useUserProfiles(
+    request
+      ? [request.senderId, request.receiverId].filter((userId) => userId.length > 0)
+      : []
+  );
+  const [skillNames, setSkillNames] = useState<Record<string, string | null>>(
+    {}
+  );
 
   const currentUserId = getCurrentUserId();
 
   useEffect(() => {
     loadRequest();
   }, [requestId]);
+
+  useEffect(() => {
+    let active = true;
+    const skillIds = [
+      ...new Set(
+        [request?.offeredSkillId, request?.requestedSkillId].filter(
+          (skillId): skillId is string =>
+            typeof skillId === "string" && skillId.length > 0
+        )
+      ),
+    ];
+
+    Promise.all(
+      skillIds.map(async (skillId) => [skillId, await getSkillName(skillId)] as const)
+    )
+      .then((entries) => {
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(entries),
+          }));
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load request skill names:", error);
+        if (active) {
+          setSkillNames((current) => ({
+            ...current,
+            ...Object.fromEntries(skillIds.map((skillId) => [skillId, null])),
+          }));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [request?.offeredSkillId, request?.requestedSkillId]);
+
+  function getStudentDisplayName(userId: string): string {
+    if (!userId) return "Student unavailable";
+    return Object.prototype.hasOwnProperty.call(userProfiles, userId)
+      ? displayNameOf(userProfiles[userId])
+      : "Loading student...";
+  }
+
+  function getSkillDisplayName(skillId: string): string {
+    if (!skillId) return "Skill unavailable";
+    if (!Object.prototype.hasOwnProperty.call(skillNames, skillId)) {
+      return "Loading skill...";
+    }
+    return skillNames[skillId] ?? "Skill unavailable";
+  }
 
   async function loadRequest() {
     if (!requestId) {
@@ -193,7 +258,7 @@ export default function ExchangeRequestDetailsScreen() {
         </Text>
 
         <Text style={styles.value}>
-          {request.senderId}
+          {getStudentDisplayName(request.senderId)}
         </Text>
 
         <Text style={styles.label}>
@@ -201,7 +266,7 @@ export default function ExchangeRequestDetailsScreen() {
         </Text>
 
         <Text style={styles.value}>
-          {request.receiverId}
+          {getStudentDisplayName(request.receiverId)}
         </Text>
 
         <Text style={styles.label}>
@@ -209,7 +274,7 @@ export default function ExchangeRequestDetailsScreen() {
         </Text>
 
         <Text style={styles.value}>
-          {request.offeredSkillId}
+          {getSkillDisplayName(request.offeredSkillId)}
         </Text>
 
         <Text style={styles.label}>
@@ -217,7 +282,7 @@ export default function ExchangeRequestDetailsScreen() {
         </Text>
 
         <Text style={styles.value}>
-          {request.requestedSkillId}
+          {getSkillDisplayName(request.requestedSkillId)}
         </Text>
 
         <Text style={styles.label}>

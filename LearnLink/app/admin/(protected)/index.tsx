@@ -18,6 +18,10 @@ import {
   type AdminDashboardData,
   type RecentExchangeActivity,
 } from "../../../services/adminDashboard";
+import {
+  displayNameOf,
+  useUserProfiles,
+} from "../../../services/member5/userService";
 
 type DashboardSection = {
   title: string;
@@ -64,6 +68,23 @@ export default function AdminHomeScreen() {
   const [logoutError, setLogoutError] = useState("");
   const wide = width >= 760;
   const threeColumns = width >= 760;
+  const activityUserIds =
+    dashboard?.recentActivities
+      .flatMap((activity) => [activity.senderId, activity.receiverId])
+      .filter((userId) => userId.length > 0) ?? [];
+  const userProfiles = useUserProfiles(activityUserIds);
+
+  function getActivityUserName(userId: string): string {
+    if (!userId) return "Student unavailable";
+    if (!Object.prototype.hasOwnProperty.call(userProfiles, userId)) {
+      return "Loading student...";
+    }
+
+    const profile = userProfiles[userId];
+    return profile?.displayName
+      ? displayNameOf(profile)
+      : "Student unavailable";
+  }
 
   const loadDashboard = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -293,7 +314,12 @@ export default function AdminHomeScreen() {
             </View>
             {dashboard.recentActivities.length ? (
               dashboard.recentActivities.map((activity) => (
-                <ActivityRow key={activity.id} activity={activity} />
+                <ActivityRow
+                  key={activity.id}
+                  activity={activity}
+                  senderName={getActivityUserName(activity.senderId)}
+                  receiverName={getActivityUserName(activity.receiverId)}
+                />
               ))
             ) : (
               <Text style={styles.emptyInline}>
@@ -342,7 +368,15 @@ export default function AdminHomeScreen() {
   );
 }
 
-function ActivityRow({ activity }: { activity: RecentExchangeActivity }) {
+function ActivityRow({
+  activity,
+  senderName,
+  receiverName,
+}: {
+  activity: RecentExchangeActivity;
+  senderName: string;
+  receiverName: string;
+}) {
   const dateLabel = activity.createdAt
     ? activity.createdAt.toLocaleString()
     : "Date unavailable";
@@ -355,7 +389,7 @@ function ActivityRow({ activity }: { activity: RecentExchangeActivity }) {
           Exchange request · {activity.status}
         </Text>
         <Text numberOfLines={1} style={styles.activityDetail}>
-          {activity.senderId} → {activity.receiverId}
+          {senderName} → {receiverName}
         </Text>
         <Text style={styles.activityDate}>{dateLabel}</Text>
       </View>

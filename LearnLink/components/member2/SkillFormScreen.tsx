@@ -104,6 +104,19 @@ export default function SkillFormScreen() {
         setAvailability(existingSkill.availability ?? "");
       }
     } catch (loadError) {
+      if (
+        loadError instanceof Error &&
+        loadError.message === "This skill is not in your portfolio or no longer exists."
+      ) {
+        setError(null);
+        Alert.alert(
+          "Skill not found",
+          "This skill is not in your portfolio or no longer exists.",
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+        return;
+      }
+
       const message =
         loadError instanceof Error
           ? loadError.message
@@ -113,7 +126,7 @@ export default function SkillFormScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [userSkillId]);
+  }, [router, userSkillId]);
 
   useEffect(() => {
     void loadForm();

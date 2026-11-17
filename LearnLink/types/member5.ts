@@ -40,7 +40,10 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: FirestoreDate;
   createdAt: FirestoreDate;
-  /** SCHEMA ADDITION: uid → unread message count. Maintained by Cloud Functions. */
+  /**
+   * SCHEMA ADDITION: uid → unread message count. The sender's app increments the
+   * recipient's count (Spark plan); the reader resets their own to 0.
+   */
   unreadCounts?: Record<string, number>;
 }
 
@@ -64,6 +67,9 @@ export const NOTIFICATION_TYPES = [
   "REQUEST_ACCEPTED",
   "REQUEST_REJECTED",
   "NEW_MESSAGE",
+  "SESSION_SCHEDULED", // SCHEMA ADDITION: client-created (Spark plan)
+  "SESSION_CONFIRMED", // SCHEMA ADDITION: client-created (Spark plan)
+  "SESSION_CANCELLED", // SCHEMA ADDITION: client-created (Spark plan)
   "SESSION_REMINDER",
   "SESSION_COMPLETED",
   "NEW_REVIEW",

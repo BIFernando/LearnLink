@@ -14,6 +14,7 @@ import {
 
 import { getCurrentUserId } from "./currentUser";
 import { db } from "../../config/firebase";
+import { notifyExchangeEvent } from "../member5/notificationService";
 
 import { ExchangeRequest } from "../../types/member4/member4";
 
@@ -78,6 +79,8 @@ export async function createExchangeRequest(
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });
+
+    await notifyExchangeEvent(docRef.id, "PENDING");
 
     return docRef.id;
 }
@@ -197,4 +200,6 @@ export async function updateExchangeStatus(
             updatedAt: serverTimestamp(),
         });
     });
+
+    await notifyExchangeEvent(requestId, newStatus);
 }

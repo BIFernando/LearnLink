@@ -6,7 +6,16 @@ import {
 import type { Transaction } from "firebase-admin/firestore";
 
 import { checkBadges } from "./badges";
-import { COLLECTIONS, REGION, awardXp, createNotification, db, getDisplayName, numberOr } from "./shared";
+import {
+  COLLECTIONS,
+  REGION,
+  awardXp,
+  createNotificationOnce,
+  db,
+  getDisplayName,
+  notificationDocId,
+  numberOr,
+} from "./shared";
 import { XP_PER_REVIEW } from "./xpRules";
 
 /**
@@ -49,13 +58,17 @@ export const onReviewCreated = onDocumentCreated(
 
     if (counted) {
       const reviewerName = await getDisplayName(reviewerId);
-      await createNotification({
-        userId: revieweeId,
-        type: "NEW_REVIEW",
-        title: `New ${rating}-Star Review`,
-        body: `${reviewerName} reviewed your session.`,
-        referenceId: reviewId,
-      });
+      // Same id as the app's Spark-plan fallback; create-once keeps one doc.
+      await createNotificationOnce(
+        {
+          userId: revieweeId,
+          type: "NEW_REVIEW",
+          title: `New ${rating}-Star Review`,
+          body: `${reviewerName} reviewed your session.`,
+          referenceId: reviewId,
+        },
+        notificationDocId("NEW_REVIEW", reviewId, revieweeId),
+      );
     }
 
     await awardXp({

@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   onDocumentCreated,
   onDocumentWritten,
@@ -8,11 +8,23 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase-functions/v2/firestore";
 
-import { COLLECTIONS, REGION, createNotification, db, getDisplayName, truncate } from "./shared";
+import {
+  COLLECTIONS,
+  REGION,
+  createNotificationOnce,
+  db,
+  exchangeNotificationId,
+  getDisplayName,
+  notificationDocId,
+  truncate,
+} from "./shared";
 
 /**
- * New message → conversation preview + unread counts + one collapsed NEW_MESSAGE
- * notification per recipient and conversation.
+ * New message → conversation preview + unread counts + a NEW_MESSAGE notification per
+ * recipient. The app does the same on the Spark plan: if the conversation's
+ * lastMessageAt is already at or after this message, the app (or a newer message)
+ * updated it, so the preview/count update is skipped. The notification uses the
+ * app's id and is written create-once.
  */
 export const onMessageCreated = onDocumentCreated(
   { document: "conversations/{conversationId}/messages/{messageId}", region: REGION },
@@ -24,7 +36,7 @@ export const onMessageCreated = onDocumentCreated(
   ) => {
     const message = event.data?.data();
     if (!message) return;
-    const { conversationId } = event.params;
+    const { conversationId, messageId } = event.params;
     const senderId = typeof message.senderId === "string" ? message.senderId : "";
     const text = typeof message.text === "string" ? message.text : "";
     const previewText =
@@ -40,27 +52,36 @@ export const onMessageCreated = onDocumentCreated(
     const participants = (conversation.get("participantIds") as string[] | undefined) ?? [];
     const recipients = participants.filter((id) => id !== senderId);
 
-    const update: Record<string, unknown> = {
-      lastMessage: truncate(previewText, 200),
-      lastMessageAt: message.createdAt ?? FieldValue.serverTimestamp(),
-    };
-    recipients.forEach((id) => {
-      update[`unreadCounts.${id}`] = FieldValue.increment(1);
-    });
-    await conversationRef.update(update);
+    const createdAt = message.createdAt instanceof Timestamp ? message.createdAt : null;
+    const lastMessageAt = conversation.get("lastMessageAt");
+    const alreadyUpdated =
+      createdAt !== null &&
+      lastMessageAt instanceof Timestamp &&
+      lastMessageAt.toMillis() >= createdAt.toMillis();
+
+    if (!alreadyUpdated) {
+      const update: Record<string, unknown> = {
+        lastMessage: truncate(previewText, 200),
+        lastMessageAt: createdAt ?? FieldValue.serverTimestamp(),
+      };
+      recipients.forEach((id) => {
+        update[`unreadCounts.${id}`] = FieldValue.increment(1);
+      });
+      await conversationRef.update(update);
+    }
 
     const senderName = await getDisplayName(senderId);
     await Promise.all(
       recipients.map((recipientId) =>
-        createNotification(
+        createNotificationOnce(
           {
             userId: recipientId,
             type: "NEW_MESSAGE",
-            title: senderName,
+            title: truncate(senderName, 100),
             body: truncate(previewText, 140),
             referenceId: conversationId,
           },
-          `msg_${conversationId}_${recipientId}`,
+          notificationDocId("NEW_MESSAGE", `${conversationId}_${messageId}`, recipientId),
         ),
       ),
     );
@@ -72,6 +93,8 @@ export const onMessageCreated = onDocumentCreated(
  * created → EXCHANGE_REQUEST to the receiver;
  * ACCEPTED → REQUEST_ACCEPTED to the sender + the conversation is created;
  * REJECTED → REQUEST_REJECTED to the sender.
+ * Notification ids are deterministic and written create-once: the app may already
+ * have created the same doc (Spark-plan fallback), and a read one must stay read.
  */
 export const onExchangeRequestWritten = onDocumentWritten(
   { document: "exchangeRequests/{requestId}", region: REGION },
@@ -90,13 +113,16 @@ export const onExchangeRequestWritten = onDocumentWritten(
 
     if (!before && after.status === "PENDING") {
       const senderName = await getDisplayName(senderId);
-      await createNotification({
-        userId: receiverId,
-        type: "EXCHANGE_REQUEST",
-        title: "New Swap Offer",
-        body: `${senderName} proposed a skill exchange with you.`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: receiverId,
+          type: "EXCHANGE_REQUEST",
+          title: "New Swap Offer",
+          body: `${senderName} proposed a skill exchange with you.`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("EXCHANGE_REQUEST", requestId, receiverId),
+      );
       return;
     }
 
@@ -116,22 +142,28 @@ export const onExchangeRequestWritten = onDocumentWritten(
         .catch(() => undefined); // already created from the app
 
       const receiverName = await getDisplayName(receiverId);
-      await createNotification({
-        userId: senderId,
-        type: "REQUEST_ACCEPTED",
-        title: "Swap Accepted",
-        body: `${receiverName} accepted your exchange request. Say hi in chat!`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: senderId,
+          type: "REQUEST_ACCEPTED",
+          title: "Swap Accepted",
+          body: `${receiverName} accepted your exchange request. Say hi in chat!`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("REQUEST_ACCEPTED", requestId, senderId),
+      );
     } else if (after.status === "REJECTED") {
       const receiverName = await getDisplayName(receiverId);
-      await createNotification({
-        userId: senderId,
-        type: "REQUEST_REJECTED",
-        title: "Swap Declined",
-        body: `${receiverName} declined your exchange request.`,
-        referenceId: requestId,
-      });
+      await createNotificationOnce(
+        {
+          userId: senderId,
+          type: "REQUEST_REJECTED",
+          title: "Swap Declined",
+          body: `${receiverName} declined your exchange request.`,
+          referenceId: requestId,
+        },
+        exchangeNotificationId("REQUEST_REJECTED", requestId, senderId),
+      );
     }
   },
 );

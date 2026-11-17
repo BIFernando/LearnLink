@@ -17,6 +17,7 @@ import {
   createNotificationOnce,
   db,
   getDisplayName,
+  notificationDocId,
 } from "./shared";
 import { XP_PER_SESSION } from "./xpRules";
 
@@ -63,7 +64,8 @@ export const onSessionCompleted = onDocumentUpdated(
           body: `You completed a skill swap with ${partnerName}. How did it go? Leave a review to earn more XP.`,
           referenceId: sessionId,
         },
-        `completed_${sessionId}_${userId}`,
+        // Same id as the app's Spark-plan fallback (sent to the other participant).
+        notificationDocId("SESSION_COMPLETED", sessionId, userId),
       );
 
       await checkBadges(userId);
@@ -106,7 +108,7 @@ export const sendSessionReminders = onSchedule(
             body: `Your peer exchange with ${partnerName} starts at ${time}.`,
             referenceId: session.id,
           },
-          `reminder_${session.id}_${userId}`,
+          notificationDocId("SESSION_REMINDER", session.id, userId),
         );
       }
     }

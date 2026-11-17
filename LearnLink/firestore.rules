@@ -357,7 +357,8 @@ service cloud.firestore {
     // =====================================================================
     // Member 5: Chat, Notifications, Gamification
     // Cloud Functions (Admin SDK) bypass these rules. XP, levels, ratings,
-    // badges, attempts and notifications are written only by functions.
+    // badges, attempts and notifications are written only by functions
+    // (exception: Spark-plan event notifications, see validClientNotification).
     // =====================================================================
 
     function conversationData(conversationId) {
@@ -394,6 +395,28 @@ service cloud.firestore {
           || (session.learnerId == request.auth.uid && session.teacherId == revieweeId));
     }
 
+    // Sender's preview update: only lastMessage / lastMessageAt / unreadCounts change,
+    // lastMessageAt is the server time, and only the other participant's count goes
+    // up by exactly one.
+    function validMessagePreviewUpdate() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let other = before.participantIds[0] == request.auth.uid
+        ? before.participantIds[1]
+        : before.participantIds[0];
+      let oldCounts = before.get('unreadCounts', {});
+      return before.participantIds.size() == 2
+        && after.diff(before).affectedKeys()
+          .hasOnly(['lastMessage', 'lastMessageAt', 'unreadCounts'])
+        && after.lastMessage is string
+        && after.lastMessage.size() > 0
+        && after.lastMessage.size() <= 200
+        && after.lastMessageAt == request.time
+        && after.unreadCounts is map
+        && after.unreadCounts.diff(oldCounts).affectedKeys().hasOnly([other])
+        && after.unreadCounts[other] == oldCounts.get(other, 0) + 1;
+    }
+
     // Conversation id == exchangeRequestId (one chat per accepted exchange).
     match /conversations/{conversationId} {
       allow read: if signedIn()
@@ -412,16 +435,20 @@ service cloud.firestore {
         && request.resource.data.unreadCounts[request.resource.data.participantIds[0]] == 0
         && request.resource.data.unreadCounts[request.resource.data.participantIds[1]] == 0
         && acceptedExchangeBetween(conversationId, request.resource.data.participantIds);
-      // A participant may only reset their own unread count to 0.
+      // A participant may reset their own unread count to 0, or (Spark plan, after
+      // sending a message) set the preview and bump the other participant's count by 1.
       allow update: if isConversationParticipant(resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts'])
-        && request.resource.data.unreadCounts[request.auth.uid] == 0
         && (
-          (!('unreadCounts' in resource.data)
-            && request.resource.data.unreadCounts.keys().hasOnly([request.auth.uid]))
-          || ('unreadCounts' in resource.data
-            && request.resource.data.unreadCounts.diff(resource.data.unreadCounts)
-              .affectedKeys().hasOnly([request.auth.uid]))
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts'])
+            && request.resource.data.unreadCounts[request.auth.uid] == 0
+            && (
+              (!('unreadCounts' in resource.data)
+                && request.resource.data.unreadCounts.keys().hasOnly([request.auth.uid]))
+              || ('unreadCounts' in resource.data
+                && request.resource.data.unreadCounts.diff(resource.data.unreadCounts)
+                  .affectedKeys().hasOnly([request.auth.uid]))
+            ))
+          || validMessagePreviewUpdate()
         );
       allow delete: if isAdmin();
 
@@ -462,13 +489,120 @@ service cloud.firestore {
       }
     }
 
+    // Spark-plan fallback: the app creates event notifications itself. The id is
+    // `${type}_${key}_${userId}`, the same id the Cloud Functions use (create-once),
+    // so client and function never write duplicates. Each type checks that the
+    // referenced doc exists and that the writer and recipient hold the right roles.
+    function validClientNotification(notificationId, key) {
+      let n = request.resource.data;
+      return n.keys().hasOnly([
+          'userId', 'type', 'title', 'body', 'referenceId', 'isRead', 'createdAt'
+        ])
+        && n.keys().hasAll([
+          'userId', 'type', 'title', 'body', 'referenceId', 'isRead', 'createdAt'
+        ])
+        && isNonEmptyString(n.userId)
+        && n.userId != request.auth.uid
+        && isNonEmptyString(n.referenceId)
+        && notificationId == n.type + '_' + key + '_' + n.userId
+        && n.isRead == false
+        && n.createdAt == request.time
+        && isNonEmptyString(n.title) && n.title.size() <= 100
+        && isNonEmptyString(n.body) && n.body.size() <= 300;
+    }
+
+    function validExchangeNotification(notificationId) {
+      let n = request.resource.data;
+      let exchange = get(
+        /databases/$(database)/documents/exchangeRequests/$(n.referenceId)
+      ).data;
+      return validClientNotification(notificationId, n.referenceId)
+        && (
+          // Sender tells the receiver about a new request.
+          (n.type == 'EXCHANGE_REQUEST'
+            && exchange.senderId == request.auth.uid
+            && exchange.receiverId == n.userId
+            && exchange.status == 'PENDING')
+          // Receiver tells the sender about the decision.
+          || (n.type == 'REQUEST_ACCEPTED'
+            && exchange.receiverId == request.auth.uid
+            && exchange.senderId == n.userId
+            && exchange.status in ['ACCEPTED', 'COMPLETED'])
+          || (n.type == 'REQUEST_REJECTED'
+            && exchange.receiverId == request.auth.uid
+            && exchange.senderId == n.userId
+            && exchange.status == 'REJECTED')
+        );
+    }
+
+    // NEW_MESSAGE_${conversationId}_${messageId}_${userId}; referenceId is the
+    // conversation. The message id is cut out of the notification id, and that
+    // message must exist and be sent by the writer.
+    function validMessageNotification(notificationId) {
+      let n = request.resource.data;
+      let prefix = 'NEW_MESSAGE_' + n.referenceId + '_';
+      let messageId = notificationId[prefix.size():notificationId.size() - n.userId.size() - 1];
+      let conversation = conversationData(n.referenceId);
+      let message = get(
+        /databases/$(database)/documents/conversations/$(n.referenceId)/messages/$(messageId)
+      ).data;
+      return messageId.size() > 0
+        && validClientNotification(notificationId, n.referenceId + '_' + messageId)
+        && request.auth.uid in conversation.participantIds
+        && n.userId in conversation.participantIds
+        && message.senderId == request.auth.uid;
+    }
+
+    // NEW_REVIEW_${reviewId}_${userId}: the writer is the reviewer, the recipient the reviewee.
+    function validReviewNotification(notificationId) {
+      let n = request.resource.data;
+      let review = get(/databases/$(database)/documents/reviews/$(n.referenceId)).data;
+      return validClientNotification(notificationId, n.referenceId)
+        && review.reviewerId == request.auth.uid
+        && review.revieweeId == n.userId;
+    }
+
+    // SESSION_*_${sessionId}_${userId}: writer and recipient are the session's two
+    // participants, and the session is in the state the type announces.
+    function validSessionNotification(notificationId) {
+      let n = request.resource.data;
+      let session = get(/databases/$(database)/documents/sessions/$(n.referenceId)).data;
+      return validClientNotification(notificationId, n.referenceId)
+        && (
+          (session.teacherId == request.auth.uid && session.learnerId == n.userId)
+          || (session.learnerId == request.auth.uid && session.teacherId == n.userId)
+        )
+        && (
+          (n.type == 'SESSION_SCHEDULED'
+            && session.status in ['PROPOSED', 'CONFIRMED'])
+          || (n.type == 'SESSION_CONFIRMED'
+            && session.status in ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'])
+          || (n.type == 'SESSION_CANCELLED' && session.status == 'CANCELLED')
+          || (n.type == 'SESSION_COMPLETED' && session.status == 'COMPLETED')
+        );
+    }
+
     match /notifications/{notificationId} {
       allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
         && request.resource.data.isRead == true;
-      allow create: if false;
+      // Only these types may come from the app; all others (NEW_MATCH, BADGE_EARNED,
+      // LEVEL_UP, SESSION_REMINDER) are created only by Cloud Functions.
+      allow create: if signedIn()
+        && (
+          (request.resource.data.type in ['EXCHANGE_REQUEST', 'REQUEST_ACCEPTED', 'REQUEST_REJECTED']
+            && validExchangeNotification(notificationId))
+          || (request.resource.data.type == 'NEW_MESSAGE'
+            && validMessageNotification(notificationId))
+          || (request.resource.data.type == 'NEW_REVIEW'
+            && validReviewNotification(notificationId))
+          || (request.resource.data.type in [
+              'SESSION_SCHEDULED', 'SESSION_CONFIRMED', 'SESSION_CANCELLED', 'SESSION_COMPLETED'
+            ]
+            && validSessionNotification(notificationId))
+        );
     }
 
     // Review id == `${sessionId}_${reviewerId}`: one review per reviewer per session.

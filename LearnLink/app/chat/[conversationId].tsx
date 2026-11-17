@@ -28,11 +28,13 @@ import {
   getExchangeLabel,
   getUpcomingSession,
   markConversationAsRead,
+  resetUnreadCount,
   sendMessage,
   sessionDate,
   subscribeToMessages,
 } from "@/services/chatService";
 import { formatClock, formatDayLabel, toDate } from "@/services/member5/format";
+import { markConversationNotificationsRead } from "@/services/member5/notificationService";
 import { displayNameOf, useUserProfiles } from "@/services/member5/userService";
 import type { Message } from "@/types/chat.types";
 import type { Session } from "@/types/member4/member4";
@@ -87,6 +89,9 @@ export default function ConversationScreen() {
         if (!active || !conversation) return;
         const other = conversation.participantIds.find((id) => id !== userId);
         if (other) setOtherUserId(other);
+        // Opening the chat clears my unread count and its message notifications.
+        if ((conversation.unreadCounts?.[userId] ?? 0) > 0) resetUnreadCount(conversationId, userId);
+        markConversationNotificationsRead(userId, conversationId);
         const [label, session] = await Promise.all([
           getExchangeLabel(conversation.exchangeRequestId),
           getUpcomingSession(conversation.exchangeRequestId, userId).catch(() => null),

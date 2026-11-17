@@ -1,5 +1,5 @@
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,15 +19,56 @@ import {
 } from "expo-router";
 
 import {
+  acceptSessionProposal,
   confirmSessionCompletion,
   getSession,
+  rejectSessionProposal,
+  suggestAnotherSessionTime,
   updateSessionStatus,
+  withdrawSessionProposal,
 } from "../../services/member4/sessionService";
 
 import { CREDITS_PER_SESSION } from "../../services/member4/creditService";
 import { getCurrentUserId } from "../../services/member4/currentUser";
 import { Session } from "../../types/member4/member4";
 import { ReportActionButton } from "../../components/reports/ReportActionButton";
+
+function parseFutureSchedule(dateValue: string, timeValue: string): Date | null {
+  const dateText = dateValue.trim();
+  const timeText = timeValue.trim();
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateText) ||
+    !/^\d{2}:\d{2}$/.test(timeText)
+  ) {
+    return null;
+  }
+
+  const scheduledAt = new Date(`${dateText}T${timeText}`);
+  if (
+    !Number.isFinite(scheduledAt.getTime()) ||
+    scheduledAt.getFullYear() !== Number(dateText.slice(0, 4)) ||
+    scheduledAt.getMonth() + 1 !== Number(dateText.slice(5, 7)) ||
+    scheduledAt.getDate() !== Number(dateText.slice(8, 10)) ||
+    scheduledAt.getHours() !== Number(timeText.slice(0, 2)) ||
+    scheduledAt.getMinutes() !== Number(timeText.slice(3, 5)) ||
+    scheduledAt.getTime() <= Date.now()
+  ) {
+    return null;
+  }
+
+  return scheduledAt;
+}
+
+function hasValidProposalProposer(session: Session): boolean {
+  const proposedBy = session.proposedBy;
+  return (
+    typeof proposedBy === "string" &&
+    proposedBy.length > 0 &&
+    proposedBy.trim() === proposedBy &&
+    (proposedBy === session.teacherId || proposedBy === session.learnerId)
+  );
+}
 
 export default function SessionDetailsScreen() {
   const { sessionId } = useLocalSearchParams<{
@@ -36,26 +78,36 @@ export default function SessionDetailsScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [suggestionDate, setSuggestionDate] = useState("");
+  const [suggestionTime, setSuggestionTime] = useState("");
+  const [showSuggestionForm, setShowSuggestionForm] = useState(false);
+  const actionLock = useRef(false);
 
-  const loadSession = useCallback(async () => {
-    if (!sessionId || Array.isArray(sessionId)) {
-      setSession(null);
-      setLoading(false);
-      return;
-    }
+  const loadSession = useCallback(
+    async (showError = true): Promise<boolean> => {
+      if (!sessionId || Array.isArray(sessionId)) {
+        setSession(null);
+        setLoading(false);
+        return false;
+      }
 
-    try {
-      setLoading(true);
-      const currentUserId = getCurrentUserId();
-      const result = await getSession(sessionId);
-      setSession(result);
-    } catch (error) {
-      console.error("Failed to load session:", error);
-      Alert.alert("Error", "Could not load session details.");
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
+      try {
+        setLoading(true);
+        const result = await getSession(sessionId);
+        setSession(result);
+        return true;
+      } catch (error) {
+        console.error("Failed to load session:", error);
+        if (showError) {
+          Alert.alert("Error", "Could not load session details.");
+        }
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionId]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -63,8 +115,131 @@ export default function SessionDetailsScreen() {
     }, [loadSession])
   );
 
-  async function handleCancel() {
-    if (!session) return;
+  async function runSessionAction(
+    operation: (id: string) => Promise<void>,
+    successTitle: string,
+    successMessage: string,
+    errorTitle: string
+  ): Promise<boolean> {
+    if (!session || actionLoading || actionLock.current) return false;
+
+    actionLock.current = true;
+    setActionLoading(true);
+    try {
+      await operation(session.id);
+      const refreshed = await loadSession(false);
+      Alert.alert(
+        successTitle,
+        refreshed
+          ? successMessage
+          : `${successMessage} Session details could not be refreshed.`
+      );
+      return true;
+    } catch (error) {
+      console.error(`${errorTitle} failed:`, error);
+      Alert.alert(
+        errorTitle,
+        error instanceof Error ? error.message : "Please try again."
+      );
+      return false;
+    } finally {
+      actionLock.current = false;
+      setActionLoading(false);
+    }
+  }
+
+  function handleAcceptProposal() {
+    void runSessionAction(
+      acceptSessionProposal,
+      "Proposal accepted",
+      "The session is now confirmed.",
+      "Could not accept proposal"
+    );
+  }
+
+  function handleRejectProposal() {
+    if (!session || actionLoading || actionLock.current) return;
+
+    Alert.alert(
+      "Reject Proposal",
+      "Are you sure you want to reject this proposed time?",
+      [
+        { text: "Keep Proposal", style: "cancel" },
+        {
+          text: "Reject",
+          style: "destructive",
+          onPress: () => {
+            void runSessionAction(
+              rejectSessionProposal,
+              "Proposal rejected",
+              "The proposed time has been rejected.",
+              "Could not reject proposal"
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  function handleWithdrawProposal() {
+    if (!session || actionLoading || actionLock.current) return;
+
+    Alert.alert(
+      "Withdraw Proposal",
+      "Are you sure you want to withdraw this proposed time?",
+      [
+        { text: "Keep Proposal", style: "cancel" },
+        {
+          text: "Withdraw",
+          style: "destructive",
+          onPress: () => {
+            void runSessionAction(
+              withdrawSessionProposal,
+              "Proposal withdrawn",
+              "The proposed time has been withdrawn.",
+              "Could not withdraw proposal"
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleSuggestAnotherTime() {
+    if (!session || actionLoading || actionLock.current) return;
+
+    const scheduledAt = parseFutureSchedule(suggestionDate, suggestionTime);
+    if (!scheduledAt) {
+      Alert.alert(
+        "Invalid date or time",
+        "Enter a valid future date as YYYY-MM-DD and time as 24-hour HH:mm."
+      );
+      return;
+    }
+
+    const succeeded = await runSessionAction(
+      (id) => suggestAnotherSessionTime(id, scheduledAt),
+      "New time suggested",
+      "Your suggested time has been sent to the other participant.",
+      "Could not suggest another time"
+    );
+
+    if (succeeded) {
+      setShowSuggestionForm(false);
+      setSuggestionDate("");
+      setSuggestionTime("");
+    }
+  }
+
+  function handleCancel() {
+    if (
+      !session ||
+      actionLoading ||
+      actionLock.current ||
+      session.status !== "CONFIRMED"
+    ) {
+      return;
+    }
 
     Alert.alert(
       "Cancel Session",
@@ -74,18 +249,13 @@ export default function SessionDetailsScreen() {
         {
           text: "Cancel Session",
           style: "destructive",
-          onPress: async () => {
-            try {
-              setActionLoading(true);
-              await updateSessionStatus(session.id, "CANCELLED");
-              await loadSession();
-              Alert.alert("Session Cancelled", "The session has been cancelled.");
-            } catch (error) {
-              console.error("Failed to cancel session:", error);
-              Alert.alert("Error", "Could not cancel the session.");
-            } finally {
-              setActionLoading(false);
-            }
+          onPress: () => {
+            void runSessionAction(
+              (id) => updateSessionStatus(id, "CANCELLED"),
+              "Session Cancelled",
+              "The session has been cancelled.",
+              "Could not cancel session"
+            );
           },
         },
       ]
@@ -177,8 +347,23 @@ export default function SessionDetailsScreen() {
     currentUserId === session.teacherId ||
     currentUserId === session.learnerId;
 
-  const canCancel =
-    ["PROPOSED", "CONFIRMED"].includes(session.status);
+  const validProposalProposer = hasValidProposalProposer(session);
+  const canWithdrawProposal =
+    isParticipant &&
+    session.status === "PROPOSED" &&
+    validProposalProposer &&
+    session.proposedBy === currentUserId;
+  const canRespondToProposal =
+    isParticipant &&
+    session.status === "PROPOSED" &&
+    validProposalProposer &&
+    session.proposedBy !== currentUserId;
+  const hasUnknownProposalProposer =
+    isParticipant &&
+    session.status === "PROPOSED" &&
+    !validProposalProposer;
+  const canCancelConfirmed =
+    isParticipant && session.status === "CONFIRMED";
 
   const canConfirmCompletion =
     ["CONFIRMED", "IN_PROGRESS"].includes(session.status) &&
@@ -314,7 +499,7 @@ export default function SessionDetailsScreen() {
       {alreadyConfirmed &&
         session.status !== "COMPLETED" && (
           <Text style={styles.notice}>
-            You've confirmed completion. Waiting for the other participant.
+            You have confirmed completion. Waiting for the other participant.
           </Text>
         )}
 
@@ -341,7 +526,85 @@ export default function SessionDetailsScreen() {
         </TouchableOpacity>
       )}
 
-      {isParticipant && canCancel && (
+      {canWithdrawProposal && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Your Proposal</Text>
+          <Text style={styles.value}>
+            The other participant must respond to this proposed time.
+          </Text>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleWithdrawProposal}
+            disabled={actionLoading}
+          >
+            <Text style={styles.buttonText}>Withdraw Proposal</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {canRespondToProposal && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Respond to Proposal</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleAcceptProposal}
+            disabled={actionLoading}
+          >
+            <Text style={styles.buttonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleRejectProposal}
+            disabled={actionLoading}
+          >
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => setShowSuggestionForm((visible) => !visible)}
+            disabled={actionLoading}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {showSuggestionForm ? "Hide Suggested Time" : "Suggest Another Time"}
+            </Text>
+          </TouchableOpacity>
+          {showSuggestionForm && (
+            <View style={styles.suggestionForm}>
+              <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={suggestionDate}
+                onChangeText={setSuggestionDate}
+                placeholder="2026-12-15"
+                autoCapitalize="none"
+              />
+              <Text style={styles.label}>Time (24-hour HH:mm)</Text>
+              <TextInput
+                style={styles.input}
+                value={suggestionTime}
+                onChangeText={setSuggestionTime}
+                placeholder="14:30"
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleSuggestAnotherTime}
+                disabled={actionLoading}
+              >
+                <Text style={styles.buttonText}>Send Suggested Time</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
+      {hasUnknownProposalProposer && (
+        <Text style={styles.notice}>
+          The proposer for this session is unknown. Proposal actions are unavailable.
+        </Text>
+      )}
+
+      {canCancelConfirmed && (
         <TouchableOpacity
           style={styles.cancelButton}
           onPress={handleCancel}
@@ -370,7 +633,12 @@ export default function SessionDetailsScreen() {
         </View>
       ) : null}
 
-      {actionLoading && <ActivityIndicator style={styles.loader} size="large" />}
+      {actionLoading && (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.progressText}>Updating session...</Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={styles.backButton}
@@ -396,9 +664,12 @@ const styles = StyleSheet.create({
   secondaryButton: { backgroundColor: "#e5e7eb", padding: 14, borderRadius: 8, alignItems: "center", marginTop: 20 },
   secondaryButtonText: { fontWeight: "600" },
   cancelButton: { backgroundColor: "#c62828", padding: 15, borderRadius: 8, alignItems: "center", marginBottom: 12 },
+  suggestionForm: { marginTop: 12 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, marginTop: 6, marginBottom: 12 },
   reportActions: { marginTop: 8 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   notice: { marginVertical: 12, textAlign: "center" },
-  loader: { marginVertical: 12 },
+  loader: { marginVertical: 12, alignItems: "center" },
+  progressText: { marginTop: 8 },
   backButton: { borderWidth: 1, borderRadius: 8, padding: 14, alignItems: "center", marginTop: 8 },
 });
